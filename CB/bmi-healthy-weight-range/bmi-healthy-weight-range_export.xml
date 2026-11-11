@@ -1,0 +1,290 @@
+<calculator> <utility>
+            <id><![CDATA[13]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[BMI & Healthy Weight Range]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- BMI & Healthy Weight Range ----
+// $unit is the selected radio value ('metric' or 'imperial'); $height / $weight are Number fields.
+$h = (float) $height;
+$w = (float) $weight;
+
+if ($unit === 'imperial') {          // inches / pounds
+    $h_m  = $h * 0.0254;
+    $w_kg = $w * 0.45359237;
+    $u_w  = 'lb';
+    $u_h  = 'in';
+    $factor = 2.20462;
+} else {                              // centimetres / kilograms
+    $h_m  = $h / 100;
+    $w_kg = $w;
+    $u_w  = 'kg';
+    $u_h  = 'cm';
+    $factor = 1;
+}
+
+$bmi_raw = ($h_m > 0) ? $w_kg / ($h_m * $h_m) : 0;
+
+if     ($bmi_raw < 18.5) { $category = 'Underweight'; $advice = 'Below the healthy range. Consider talking to a health professional about a balanced plan.'; }
+elseif ($bmi_raw < 25)   { $category = 'Healthy weight'; $advice = 'You are within the healthy range for your height. Keep it up.'; }
+elseif ($bmi_raw < 30)   { $category = 'Overweight'; $advice = 'Slightly above the healthy range. Small, steady changes in activity and diet help.'; }
+else                     { $category = 'Obesity'; $advice = 'Well above the healthy range. A health professional can help you build a safe plan.'; }
+
+// healthy weight window for this height (BMI 18.5 - 24.9)
+$min_w = 18.5 * $h_m * $h_m * $factor;
+$max_w = 24.9 * $h_m * $h_m * $factor;
+
+// position on the 15-40 BMI scale (0-100 %) for the gauge marker
+$pct = max(0, min(100, ($bmi_raw - 15) / 25 * 100));
+
+// difference to the healthy window
+if ($w_kg * $factor > $max_w)      { $delta = number_format($w_kg * $factor - $max_w, 1) . ' ' . $u_w . ' above the healthy maximum'; }
+elseif ($w_kg * $factor < $min_w)  { $delta = number_format($min_w - $w_kg * $factor, 1) . ' ' . $u_w . ' below the healthy minimum'; }
+else                               { $delta = 'Inside the healthy window'; }
+
+// display strings (same in-place convention as the other examples)
+$bmi       = number_format($bmi_raw, 1, '.', ',');
+$min_w     = number_format($min_w, 1, '.', ',');
+$max_w     = number_format($max_w, 1, '.', ',');
+$pct       = number_format($pct, 1, '.', '');
+$unit_w    = $u_w;
+$unit_h    = $u_h;
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-bmi{--a:#0f766e;--a2:#14b8a6;--soft:#ecfdf5;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-bmi *{box-sizing:border-box}
+.cbx-bmi .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-bmi .cbx-c12{grid-column:span 12}.cbx-bmi .cbx-c6{grid-column:span 6}.cbx-bmi .cbx-c4{grid-column:span 4}.cbx-bmi .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-bmi .cbx-c6,.cbx-bmi .cbx-c4,.cbx-bmi .cbx-c3{grid-column:span 12}}
+.cbx-bmi .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-bmi .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-bmi .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-bmi .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-bmi .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-bmi .cbx-card .form-control,.cbx-bmi .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-bmi .cbx-card .form-control:focus,.cbx-bmi .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #0f766e33;outline:0}
+.cbx-bmi .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-bmi .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-bmi .cbx-card textarea.form-control{min-height:90px}
+.cbx-bmi .cbx-card .radio,.cbx-bmi .cbx-card .checkbox{margin:0}
+.cbx-bmi .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-bmi .cbx-card div[style*="float"]{float:none!important}
+.cbx-bmi .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-bmi .cbx-card label.radio,.cbx-bmi .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#0f766e,#14b8a6);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #0f766e44;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #0f766e55}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #0f766e66;outline-offset:2px}
+.cbx-bmi-res{--a:#0f766e;--a2:#14b8a6;--soft:#ecfdf5;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-bmi-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-bmi-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #0f766e33}
+.cbx-bmi-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-bmi-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-bmi-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-bmi-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-bmi-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-bmi-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-bmi-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-bmi-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-bmi-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-bmi-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-bmi-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-bmi-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-bmi-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-bmi-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-bmi-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-bmi-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-bmi-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-bmi-res .cbx-row:last-child{border-bottom:0}
+.cbx-bmi-res .cbx-row b{font-weight:700}
+.cbx-bmi-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-bmi-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-bmi-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-bmi-res .cbx-table .r{text-align:right}
+.cbx-bmi-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-bmi-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-bmi-res .cbx-gauge i{display:block;height:100%}
+.cbx-bmi-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-bmi-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-bmi-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-bmi-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-bmi-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-bmi"><div class="cbx-grid">
+<div class="cbx-sec">About you</div>
+<div class="cbx-c12"><div class="cbx-card"><label class="cbx-l">Unit system</label>##unit##<div class="cbx-h">Metric: centimetres and kilograms. Imperial: inches and pounds.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Height (cm or in)</label>##height##<div class="cbx-h">For example 175 cm, or 69 in if you chose Imperial.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Weight (kg or lb)</label>##weight##<div class="cbx-h">Your current body weight.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<div class="cbx-bmi-res">
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-weight-scale" aria-hidden="true"></i></div><div class="cbx-lab">Your BMI</div><div class="cbx-val">##bmi##</div><div class="cbx-sub">##category##</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-heart-pulse" aria-hidden="true"></i></div><div class="cbx-lab">Healthy weight range</div><div class="cbx-val">##min_w## &ndash; ##max_w## ##unit_w##</div><div class="cbx-sub">For your height (BMI 18.5&ndash;24.9)</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-scale-balanced" aria-hidden="true"></i></div><div class="cbx-lab">Your weight</div><div class="cbx-val">##weight## ##unit_w##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-ruler-vertical" aria-hidden="true"></i></div><div class="cbx-lab">Your height</div><div class="cbx-val">##height## ##unit_h##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-bullseye" aria-hidden="true"></i></div><div class="cbx-lab">Versus healthy range</div><div class="cbx-val">##delta##</div></div>
+</div>
+<div class="cbx-panel"><h4>Where you sit on the BMI scale</h4><div class="cbx-gaugewrap"><div class="cbx-gauge"><i style="width:14%;background:#38bdf8"></i><i style="width:26%;background:#22c55e"></i><i style="width:20%;background:#f59e0b"></i><i style="width:40%;background:#ef4444"></i></div><div class="cbx-pin" style="left:##pct##%"></div></div><div class="cbx-ticks"><span style="left:0%">15</span><span style="left:14%">18.5</span><span style="left:40%">25</span><span style="left:60%">30</span><span style="left:100%">40</span></div><p style="margin:.6rem 0 0">##advice##</p></div>
+<p class="cbx-note">BMI is a screening tool, not a diagnosis. It does not account for muscle mass, age or body composition.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Calculate my BMI]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[42]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[13]]></idobj>
+                                    <type><![CDATA[12]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[unit]]></var>
+                                    <name><![CDATA[Unit system]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[metric]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Metric (cm / kg)]]></name>
+                            <value><![CDATA[metric]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Imperial (in / lb)]]></name>
+                            <value><![CDATA[imperial]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[43]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[13]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[height]]></var>
+                                    <name><![CDATA[Height]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[175]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[44]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[13]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[weight]]></var>
+                                    <name><![CDATA[Weight]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[72]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+        </calculator>

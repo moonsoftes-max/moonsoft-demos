@@ -1,0 +1,449 @@
+<calculator> <utility>
+            <id><![CDATA[38]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[SaaS Plan Price Estimator]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- SaaS Plan Price Estimator ----
+// $plan  Radio: 'starter' | 'pro' | 'business'      $seats    Number
+// $addons Multiple option list: array of option values (empty when nothing is ticked)
+// $billing Radio: 'monthly' | 'yearly' (yearly = 12 months for the price of 10)
+// $nonprofit Yes/No: 'Y' when ticked, 'N' otherwise (20 % off the monthly price)
+
+$plans = [
+    'starter'  => ['Starter',  12],
+    'pro'      => ['Pro',      24],
+    'business' => ['Business', 42],
+];
+// key => [label, 'seat' (price per seat) or 'flat' (price per account), monthly price]
+$addon_defs = [
+    'support' => ['Priority support',      'seat', 3],
+    'sso'     => ['Single sign-on (SSO)',  'flat', 99],
+    'audit'   => ['Audit log',             'flat', 79],
+    'storage' => ['Extra storage (+1 TB)', 'flat', 49],
+];
+
+$n      = max(1, min(10000, (int) $seats));
+$pkey   = isset($plans[$plan]) ? $plan : 'pro';
+$sel    = is_array($addons) ? $addons : explode(',', (string) $addons);
+$yearly = ($billing === 'yearly');
+$np     = ($nonprofit === 'Y');
+
+$money = function ($v) { return ($v < 0 ? '-' : '') . '$' . number_format(abs($v), 2, '.', ','); };
+$hero  = function ($v) { return '$' . number_format($v, (abs($v - round($v)) < 0.005) ? 0 : 2, '.', ','); };
+
+// monthly list price of a given plan with the selected add-ons
+$addon_month = 0;
+$rows = '';
+foreach ($addon_defs as $k => $d) {
+    if (!in_array($k, $sel)) { continue; }
+    $line = ($d[1] === 'seat') ? $d[2] * $n : $d[2];
+    $addon_month += $line;
+    $calc = ($d[1] === 'seat') ? number_format($n) . ' seats &times; ' . $money($d[2]) : 'flat fee';
+    $rows .= '<tr><td>' . $d[0] . '</td><td class="c">' . $calc . '</td><td class="r">' . $money($line) . '</td></tr>';
+}
+$n_addons = count(array_filter(array_keys($addon_defs), function ($k) use ($sel) { return in_array($k, $sel); }));
+
+$plan_month = $plans[$pkey][1] * $n;
+$sub_month  = $plan_month + $addon_month;                       // list price per month
+$np_disc    = $np ? round($sub_month * 0.20, 2) : 0;            // non-profit discount per month
+$after_np   = $sub_month - $np_disc;                            // monthly price after the discount
+
+if ($yearly) {
+    $annual    = round($after_np * 10, 2);                      // 12 months for the price of 10
+    $eff_month = round($annual / 12, 2);
+} else {
+    $annual    = round($after_np * 12, 2);
+    $eff_month = $after_np;
+}
+$yr_disc   = $eff_month - $after_np;                            // negative number, per month equivalent
+$list_year = $sub_month * 12;
+$saved     = $list_year - $annual;
+$per_seat  = $eff_month / $n;
+$extra_2m  = round($after_np * 2, 2);                           // what yearly billing saves per year
+
+// invoice-style table
+$tbl  = '<table class="cbx-table dd-inv"><thead><tr><th>Item</th><th class="c">Calculation</th><th class="r">Per month</th></tr></thead><tbody>';
+$tbl .= '<tr><td><b>' . $plans[$pkey][0] . ' plan</b></td><td class="c">' . number_format($n) . ' seats &times; ' . $money($plans[$pkey][1]) . '</td><td class="r">' . $money($plan_month) . '</td></tr>';
+$tbl .= $rows;
+$tbl .= '<tr class="sub"><td colspan="2">Subtotal (list price)</td><td class="r">' . $money($sub_month) . '</td></tr>';
+if ($np)     { $tbl .= '<tr class="disc"><td colspan="2">Non-profit discount (20%)</td><td class="r">' . $money(-$np_disc) . '</td></tr>'; }
+if ($yearly) { $tbl .= '<tr class="disc"><td colspan="2">Yearly billing: 2 months free</td><td class="r">' . $money($yr_disc) . '</td></tr>'; }
+$tbl .= '<tr class="tot"><td colspan="2">Total per month' . ($yearly ? ' (effective)' : '') . '</td><td class="r">' . $money($eff_month) . '</td></tr>';
+$tbl .= '<tr class="tot2"><td colspan="2">Total per year' . ($yearly ? ' (billed once)' : ' (12 payments)') . '</td><td class="r">' . $money($annual) . '</td></tr>';
+$tbl .= '</tbody></table>';
+
+// comparison of the three plans with the same seats, add-ons, billing and discount
+$cmp = [];
+$maxc = 0;
+foreach ($plans as $k => $p) {
+    $m = ($p[1] * $n + $addon_month) * ($np ? 0.8 : 1) * ($yearly ? 10 / 12 : 1);
+    $cmp[$k] = round($m, 2);
+    $maxc = max($maxc, $cmp[$k]);
+}
+$bars = '';
+foreach ($plans as $k => $p) {
+    $w = $maxc > 0 ? round($cmp[$k] / $maxc * 100, 1) : 0;
+    $bars .= '<div class="dd-pl' . ($k === $pkey ? ' on' : '') . '"><span class="dd-pn">' . $p[0] . '</span>'
+           . '<span class="dd-pb"><i style="width:' . $w . '%"></i></span><span class="dd-pv">' . $money($cmp[$k]) . '</span></div>';
+}
+
+// display strings (overwrite in place, as in the other examples)
+$hero_month = $hero($eff_month);
+$hero_year  = $hero($annual);
+$sub_month_txt = $yearly ? 'Effective price, billed yearly' : 'Billed monthly';
+$sub_year_txt  = $yearly ? 'Paid once a year. Yearly billing saves ' . $hero($extra_2m) . ' compared with paying monthly'
+                         : 'Twelve monthly payments. Yearly billing would save ' . $hero($extra_2m);
+$seat_price = $money($per_seat);
+$saved_txt  = $hero($saved);
+$plan_name  = $plans[$pkey][0];
+$seats_txt  = number_format($n);
+$addon_txt  = $n_addons . ($n_addons == 1 ? ' add-on' : ' add-ons');
+$table      = $tbl;
+$compare    = $bars;
+$cmp_note   = ($yearly ? 'Effective monthly price, yearly billing' : 'Monthly price') . ($np ? ', non-profit discount applied' : '');
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-saas{--a:#4338ca;--a2:#818cf8;--soft:#eef2ff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-saas *{box-sizing:border-box}
+.cbx-saas .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-saas .cbx-c12{grid-column:span 12}.cbx-saas .cbx-c6{grid-column:span 6}.cbx-saas .cbx-c4{grid-column:span 4}.cbx-saas .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-saas .cbx-c6,.cbx-saas .cbx-c4,.cbx-saas .cbx-c3{grid-column:span 12}}
+.cbx-saas .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-saas .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-saas .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-saas .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-saas .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-saas .cbx-card .form-control,.cbx-saas .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-saas .cbx-card .form-control:focus,.cbx-saas .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #4338ca33;outline:0}
+.cbx-saas .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-saas .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-saas .cbx-card textarea.form-control{min-height:90px}
+.cbx-saas .cbx-card .radio,.cbx-saas .cbx-card .checkbox{margin:0}
+.cbx-saas .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-saas .cbx-card div[style*="float"]{float:none!important}
+.cbx-saas .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-saas .cbx-card label.radio,.cbx-saas .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#4338ca,#818cf8);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #4338ca44;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #4338ca55}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #4338ca66;outline-offset:2px}
+.cbx-saas-res{--a:#4338ca;--a2:#818cf8;--soft:#eef2ff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-saas-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-saas-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #4338ca33}
+.cbx-saas-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-saas-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-saas-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-saas-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-saas-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-saas-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-saas-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-saas-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-saas-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-saas-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-saas-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-saas-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-saas-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-saas-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-saas-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-saas-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-saas-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-saas-res .cbx-row:last-child{border-bottom:0}
+.cbx-saas-res .cbx-row b{font-weight:700}
+.cbx-saas-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-saas-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-saas-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-saas-res .cbx-table .r{text-align:right}
+.cbx-saas-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-saas-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-saas-res .cbx-gauge i{display:block;height:100%}
+.cbx-saas-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-saas-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-saas-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-saas-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-saas-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-saas-res .cbx-col .sa{background:var(--a)}
+.cbx-saas-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-saas-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-saas-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-saas-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-saas-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-saas-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-saas-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-saas"><div class="cbx-grid">
+<div class="cbx-sec">Plan and team size</div>
+<div class="cbx-c12"><div class="cbx-card"><label class="cbx-l">Plan</label>##plan##<div class="cbx-h">Prices are per seat, per month, at list price.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Number of seats</label>##seats##<div class="cbx-h">How many people will use it (1 to 10,000).</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Non-profit organisation</label>##nonprofit##<div class="cbx-h">Registered non-profits get 20% off the monthly price.</div></div></div>
+<div class="cbx-sec">Add-ons and billing</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Add-ons</label>##addons##<div class="cbx-h">Tick any extras. Support is charged per seat, the rest are flat monthly fees.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Billing</label>##billing##<div class="cbx-h">Yearly billing pays for 10 months and gives you 12.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<style>
+.cbx-saas .cbx-card .radgroup{flex-direction:column;gap:.5rem}
+.cbx-saas .cbx-card .form-check{margin:.3rem 0}
+.cbx-saas-res .dd-inv td.c,.cbx-saas-res .dd-inv th.c{text-align:left;color:var(--muted)}
+.cbx-saas-res .dd-inv td.r{white-space:nowrap;font-variant-numeric:tabular-nums}
+.cbx-saas-res .dd-inv tr.sub td{border-top:2px solid var(--line);font-weight:600;color:var(--muted)}
+.cbx-saas-res .dd-inv tr.disc td{color:#15803d;font-weight:600}
+.cbx-saas-res .dd-inv tr.tot td{font-weight:800;font-size:1.05rem;border-top:2px solid var(--a)}.cbx-saas-res .dd-inv tr.tot{background:#fff}
+.cbx-saas-res .dd-inv tr.tot2 td{font-weight:800;font-size:1.05rem;color:var(--a);border-bottom:0}
+.cbx-saas-res .dd-tblwrap{overflow-x:auto}
+.cbx-saas-res .dd-pl{display:grid;grid-template-columns:5.5rem 1fr 6.2rem;align-items:center;gap:.7rem;padding:.3rem 0;font-size:.92rem}
+.cbx-saas-res .dd-pb{display:block;height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+.cbx-saas-res .dd-pb i{display:block;height:100%;border-radius:999px;background:#a5b4fc}
+.cbx-saas-res .dd-pl.on .dd-pb i{background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-saas-res .dd-pl.on .dd-pn{font-weight:800;color:var(--a)}
+.cbx-saas-res .dd-pv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.cbx-saas-res .dd-cap{font-size:.8rem;color:var(--muted);margin:.5rem 0 0}
+@media(max-width:480px){.cbx-saas-res .dd-pl{grid-template-columns:4.6rem 1fr 5.4rem;gap:.5rem}.cbx-saas-res .dd-inv td,.cbx-saas-res .dd-inv th{padding:.45rem .35rem;font-size:.84rem}}
+</style><div class="cbx-saas-res">
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-calendar-check" aria-hidden="true"></i></div><div class="cbx-lab">Per month</div><div class="cbx-val">##hero_month##</div><div class="cbx-sub">##sub_month_txt##</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-file-invoice-dollar" aria-hidden="true"></i></div><div class="cbx-lab">Per year</div><div class="cbx-val">##hero_year##</div><div class="cbx-sub">##sub_year_txt##</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-user" aria-hidden="true"></i></div><div class="cbx-lab">Effective price per seat</div><div class="cbx-val">##seat_price## / mo</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-users" aria-hidden="true"></i></div><div class="cbx-lab">Seats</div><div class="cbx-val">##seats_txt##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-puzzle-piece" aria-hidden="true"></i></div><div class="cbx-lab">Add-ons</div><div class="cbx-val">##addon_txt##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-piggy-bank" aria-hidden="true"></i></div><div class="cbx-lab">Saved per year vs list</div><div class="cbx-val">##saved_txt##</div></div>
+</div>
+<div class="cbx-panel"><h4>Your quote: ##plan_name## plan</h4><div class="dd-tblwrap">##table##</div></div><div class="cbx-panel"><h4>The same team on each plan</h4>##compare##<p class="dd-cap">##cmp_note##</p></div>
+<p class="cbx-note">Illustrative list prices in US dollars, excluding taxes. Yearly billing charges 10 months for 12 months of service.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Estimate my price]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[176]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[38]]></idobj>
+                                    <type><![CDATA[12]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[plan]]></var>
+                                    <name><![CDATA[Plan]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[pro]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Starter &ndash; $12 per seat / month]]></name>
+                            <value><![CDATA[starter]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Pro &ndash; $24 per seat / month]]></name>
+                            <value><![CDATA[pro]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Business &ndash; $42 per seat / month]]></name>
+                            <value><![CDATA[business]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[177]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[38]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[seats]]></var>
+                                    <name><![CDATA[Number of seats]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[25]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[178]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[38]]></idobj>
+                                    <type><![CDATA[3]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[nonprofit]]></var>
+                                    <name><![CDATA[Non-profit organisation]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[179]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[38]]></idobj>
+                                    <type><![CDATA[7]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[addons]]></var>
+                                    <name><![CDATA[Add-ons]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[support,sso]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Priority support &ndash; $3 per seat / month]]></name>
+                            <value><![CDATA[support]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Single sign-on (SSO) &ndash; $99 / month]]></name>
+                            <value><![CDATA[sso]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Audit log &ndash; $79 / month]]></name>
+                            <value><![CDATA[audit]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Extra storage (+1 TB) &ndash; $49 / month]]></name>
+                            <value><![CDATA[storage]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[180]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[38]]></idobj>
+                                    <type><![CDATA[12]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[4]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[billing]]></var>
+                                    <name><![CDATA[Billing]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[yearly]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Monthly]]></name>
+                            <value><![CDATA[monthly]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Yearly (2 months free)]]></name>
+                            <value><![CDATA[yearly]]></value> </multivalue>
+                                    </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+        </calculator>

@@ -1,0 +1,374 @@
+<calculator> <utility>
+            <id><![CDATA[42]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Running Pace & Race Predictor]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Running Pace & Race Predictor ----
+// $refdist = List value (distance in km), $hours / $minutes / $seconds = the reference finishing time.
+$d1 = (float) $refdist;
+if ($d1 <= 0) { $d1 = 10; }
+$t1 = max(0, (int) $hours) * 3600 + max(0, (int) $minutes) * 60 + max(0, (float) $seconds);
+if ($t1 <= 0) { $t1 = 1; }
+
+$km_per_mile = 1.609344;
+$pace_km   = $t1 / $d1;                       // seconds per km
+$pace_mi   = $pace_km * $km_per_mile;         // seconds per mile
+$speed_kmh = 3600 / $pace_km;
+$speed_mph = $speed_kmh / $km_per_mile;
+
+// helpers: seconds -> h:mm:ss  and  seconds -> m:ss
+$hms = function ($s) {
+    $s = (int) round($s);
+    $h = intdiv($s, 3600); $m = intdiv($s % 3600, 60); $x = $s % 60;
+    return $h > 0 ? sprintf('%d:%02d:%02d', $h, $m, $x) : sprintf('%d:%02d', $m, $x);
+};
+$ms = function ($s) {
+    $s = (int) round($s);
+    return sprintf('%d:%02d', intdiv($s, 60), $s % 60);
+};
+
+// Riegel: T2 = T1 * (D2 / D1) ^ 1.06
+$races = [
+    ['5K',            5.0],
+    ['10K',          10.0],
+    ['Half marathon', 21.0975],
+    ['Marathon',     42.195],
+];
+$pred = [];
+$rows = '';
+foreach ($races as $r) {
+    $t2 = $t1 * pow($r[1] / $d1, 1.06);
+    $pred[$r[0]] = $t2;
+    $is_ref = abs($r[1] - $d1) < 0.001;
+    $rows .= '<tr' . ($is_ref ? ' class="ref"' : '') . '><td>' . $r[0] . ($is_ref ? ' <span class="cbx-badge">Your result</span>' : '') . '</td>'
+           . '<td class="r">' . $hms($t2) . '</td>'
+           . '<td class="r">' . $ms($t2 / $r[1]) . '</td>'
+           . '<td class="r">' . $ms($t2 / $r[1] * $km_per_mile) . '</td></tr>';
+}
+$pred_rows = $rows;
+
+// pace zones from the predicted race paces (seconds per km)
+$p5   = $pred['5K'] / 5;
+$p10  = $pred['10K'] / 10;
+$phm  = $pred['Half marathon'] / 21.0975;
+$pmar = $pred['Marathon'] / 42.195;
+$zones = [
+    ['Easy',           $ms($pmar * 1.25) . '&ndash;' . $ms($pmar * 1.10), '#bae6fd'],
+    ['Marathon pace',  $ms($pmar),                                      '#7dd3fc'],
+    ['Half marathon',  $ms($phm),                                       '#fcd34d'],
+    ['10K pace',       $ms($p10),                                       '#fbbf24'],
+    ['5K pace',        $ms($p5),                                        '#f59e0b'],
+    ['Speed reps',     $ms($p5 * 0.96),                                 '#b45309'],
+];
+$bar = '<div class="cbx-zonebar" role="img" aria-label="Pace zones from easy to fast">';
+$grid = '<div class="cbx-zones">';
+foreach ($zones as $z) {
+    $bar  .= '<i style="background:' . $z[2] . '"></i>';
+    $grid .= '<div class="z"><span class="dot" style="background:' . $z[2] . '"></span><b>' . $z[0] . '</b><span>' . $z[1] . ' /km</span></div>';
+}
+$bar  .= '</div>';
+$grid .= '</div>';
+$zone_html = $bar . $grid;
+
+// display strings
+$names = ['5' => '5K', '10' => '10K', '21.0975' => 'Half marathon', '42.195' => 'Marathon'];
+$ref_name = isset($names[$refdist]) ? $names[$refdist] : rtrim(rtrim(number_format($d1, 3, '.', ''), '0'), '.') . ' km';
+$pace_km_f  = $ms($pace_km);
+$pace_mi_f  = $ms($pace_mi);
+$speed_kmh_f = number_format($speed_kmh, 1);
+$speed_mph_f = number_format($speed_mph, 1);
+$ref_time_f = $hms($t1);
+$miles_f    = number_format($d1 / $km_per_mile, 2);
+$lap_f      = $ms($pace_km * 0.4);
+$five_f     = $hms($pred['5K']);
+$half_f     = $hms($pred['Half marathon']);
+$mar_f      = $hms($pred['Marathon']);
+$ref_name_f = $ref_name;
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-pace{--a:#b45309;--a2:#fbbf24;--soft:#fffbeb;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-pace *{box-sizing:border-box}
+.cbx-pace .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-pace .cbx-c12{grid-column:span 12}.cbx-pace .cbx-c6{grid-column:span 6}.cbx-pace .cbx-c4{grid-column:span 4}.cbx-pace .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-pace .cbx-c6,.cbx-pace .cbx-c4,.cbx-pace .cbx-c3{grid-column:span 12}}
+.cbx-pace .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-pace .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-pace .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-pace .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-pace .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-pace .cbx-card .form-control,.cbx-pace .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-pace .cbx-card .form-control:focus,.cbx-pace .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #b4530933;outline:0}
+.cbx-pace .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-pace .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-pace .cbx-card textarea.form-control{min-height:90px}
+.cbx-pace .cbx-card .radio,.cbx-pace .cbx-card .checkbox{margin:0}
+.cbx-pace .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-pace .cbx-card div[style*="float"]{float:none!important}
+.cbx-pace .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-pace .cbx-card label.radio,.cbx-pace .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#b45309,#fbbf24);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #b4530944;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #b4530955}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #b4530966;outline-offset:2px}
+.cbx-pace-res{--a:#b45309;--a2:#fbbf24;--soft:#fffbeb;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-pace-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-pace-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #b4530933}
+.cbx-pace-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-pace-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-pace-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-pace-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-pace-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-pace-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-pace-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-pace-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-pace-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-pace-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-pace-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-pace-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-pace-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-pace-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-pace-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-pace-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-pace-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-pace-res .cbx-row:last-child{border-bottom:0}
+.cbx-pace-res .cbx-row b{font-weight:700}
+.cbx-pace-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-pace-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-pace-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-pace-res .cbx-table .r{text-align:right}
+.cbx-pace-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-pace-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-pace-res .cbx-gauge i{display:block;height:100%}
+.cbx-pace-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-pace-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-pace-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-pace-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-pace-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-pace-res .cbx-col .sa{background:var(--a)}
+.cbx-pace-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-pace-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-pace-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-pace-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-pace-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-pace-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-pace-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-pace"><div class="cbx-grid">
+<div class="cbx-sec">Your race result</div>
+<div class="cbx-c12"><div class="cbx-card"><label class="cbx-l">Reference distance</label>##refdist##<div class="cbx-h">The race or time trial you ran.</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Hours</label>##hours##<div class="cbx-h">Whole hours (use 0 for a 5K or 10K).</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Minutes</label>##minutes##<div class="cbx-h">Whole minutes, 0 to 59.</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Seconds</label>##seconds##<div class="cbx-h">Seconds, 0 to 59.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<style>.cbx-pace-res .cbx-metrics{grid-template-columns:repeat(3,1fr)}.cbx-pace-res .cbx-table tr.ref td{background:#fff;font-weight:700;color:var(--a)}.cbx-pace-res .cbx-table tr.ref td:first-child{box-shadow:inset 4px 0 0 var(--a2)}.cbx-pace-res .cbx-table .cbx-badge{font-size:.66rem;padding:.1rem .5rem;margin-left:.4rem;white-space:nowrap}.cbx-pace-res .cbx-zonebar{display:flex;height:16px;border-radius:999px;overflow:hidden}.cbx-pace-res .cbx-zonebar i{flex:1;display:block}.cbx-pace-res .cbx-zones{display:grid;grid-template-columns:repeat(6,1fr);gap:.6rem;margin-top:.9rem}.cbx-pace-res .cbx-zones .z{display:flex;flex-direction:column;gap:.1rem;font-size:.82rem;color:var(--muted);min-width:0}.cbx-pace-res .cbx-zones .z b{color:var(--ink);font-size:.86rem}.cbx-pace-res .cbx-zones .dot{width:.7rem;height:.7rem;border-radius:3px;margin-bottom:.2rem}@media(max-width:768px){.cbx-pace-res .cbx-zones{grid-template-columns:repeat(3,1fr)}}@media(max-width:600px){.cbx-pace-res .cbx-metrics{grid-template-columns:repeat(2,1fr)}.cbx-pace-res .cbx-table{font-size:.82rem}.cbx-pace-res .cbx-table th,.cbx-pace-res .cbx-table td{padding:.45rem .3rem}.cbx-pace-res .cbx-table .cbx-badge{display:none}.cbx-pace-res .cbx-table th{letter-spacing:.03em}}</style><div class="cbx-pace-res">
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-person-running" aria-hidden="true"></i></div><div class="cbx-lab">Pace per km</div><div class="cbx-val">##pace_km_f##</div><div class="cbx-sub">min/km &middot; ##ref_name_f## in ##ref_time_f##</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-stopwatch" aria-hidden="true"></i></div><div class="cbx-lab">Pace per mile</div><div class="cbx-val">##pace_mi_f##</div><div class="cbx-sub">min/mile</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-gauge-high" aria-hidden="true"></i></div><div class="cbx-lab">Average speed</div><div class="cbx-val">##speed_kmh_f##</div><div class="cbx-sub">km/h &middot; ##speed_mph_f## mph</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-flag-checkered" aria-hidden="true"></i></div><div class="cbx-lab">Reference result</div><div class="cbx-val">##ref_name_f## &middot; ##ref_time_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-ruler-horizontal" aria-hidden="true"></i></div><div class="cbx-lab">Distance in miles</div><div class="cbx-val">##miles_f## mi</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-circle-notch" aria-hidden="true"></i></div><div class="cbx-lab">400 m lap</div><div class="cbx-val">##lap_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-medal" aria-hidden="true"></i></div><div class="cbx-lab">Predicted 5K</div><div class="cbx-val">##five_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-person-walking" aria-hidden="true"></i></div><div class="cbx-lab">Predicted half marathon</div><div class="cbx-val">##half_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-trophy" aria-hidden="true"></i></div><div class="cbx-lab">Predicted marathon</div><div class="cbx-val">##mar_f##</div></div>
+</div>
+<div class="cbx-panel"><h4>Predicted race times (Riegel formula)</h4><table class="cbx-table"><thead><tr><th>Distance</th><th class="r">Time</th><th class="r">Pace /km</th><th class="r">Pace /mi</th></tr></thead><tbody>##pred_rows##</tbody></table><p style="margin:.8rem 0 0;font-size:.88rem;color:var(--muted)">T2 = T1 &times; (D2 / D1)<sup>1.06</sup>. Predictions assume the training and pacing you would need for each distance.</p></div><div class="cbx-panel"><h4>Your pace zones</h4>##zone_html##<p style="margin:.8rem 0 0;font-size:.88rem;color:var(--muted)">Zones are the predicted race paces from easy running to speed repetitions.</p></div>
+<p class="cbx-note">Race predictions get less reliable the further the target is from the reference distance, and for marathons they assume enough weekly mileage.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Predict my times]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[199]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[42]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[refdist]]></var>
+                                    <name><![CDATA[Reference distance]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[10]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[5K (5 km)]]></name>
+                            <value><![CDATA[5]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[10K (10 km)]]></name>
+                            <value><![CDATA[10]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Half marathon (21.0975 km)]]></name>
+                            <value><![CDATA[21.0975]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Marathon (42.195 km)]]></name>
+                            <value><![CDATA[42.195]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[200]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[42]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[hours]]></var>
+                                    <name><![CDATA[Hours]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[0]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[201]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[42]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[minutes]]></var>
+                                    <name><![CDATA[Minutes]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[48]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[202]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[42]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[seconds]]></var>
+                                    <name><![CDATA[Seconds]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[30]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+        </calculator>

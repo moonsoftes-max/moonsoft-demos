@@ -1,0 +1,428 @@
+<calculator> <utility>
+            <id><![CDATA[41]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Marketing Campaign ROI]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Marketing Campaign ROI ----
+// $adspend = budget ($), $channel = google|facebook|linkedin|email (list value), $cpc = cost per click ($),
+// $conv = click-to-order conversion rate (%), $aov = average order value ($), $margin = gross margin (%).
+$fm = function ($v, $d = 0) { return number_format($v, $d, '.', ','); };
+
+$spend = max(0, (float) $adspend);
+$cpc_v = max(0.01, (float) $cpc);
+$cv    = max(0, min(100, (float) $conv)) / 100;
+$order = max(0, (float) $aov);
+$gm    = max(0, min(100, (float) $margin)) / 100;
+
+// typical click-through rate of each channel, used to estimate impressions
+$ctrs   = ['google' => 3.5, 'facebook' => 1.0, 'linkedin' => 0.6, 'email' => 2.5];
+$names  = ['google' => 'Google Ads', 'facebook' => 'Facebook', 'linkedin' => 'LinkedIn', 'email' => 'Email'];
+$ch     = isset($ctrs[$channel]) ? $channel : 'google';
+$ctr    = $ctrs[$ch];
+
+// funnel
+$clicks_r = $spend / $cpc_v;
+$imps_r   = $clicks_r / ($ctr / 100);
+$orders_r = $clicks_r * $cv;
+
+// money
+$revenue = $orders_r * $order;
+$cogs    = $revenue * (1 - $gm);                 // cost of goods sold
+$gross   = $revenue - $cogs;                     // gross profit before ad spend
+$profit  = $gross - $spend;                      // campaign profit after ad spend
+$roi     = ($spend > 0) ? $profit / $spend * 100 : 0;
+$roas    = ($spend > 0) ? $revenue / $spend : 0;
+$cpa     = ($orders_r > 0) ? $spend / $orders_r : 0;
+$be_roas = ($gm > 0) ? 1 / $gm : 0;              // ROAS at which profit is exactly zero
+
+// revenue split bar: cost of goods | ad spend | profit
+$tot  = max(1, $cogs + $spend + max(0, $profit));
+$w_c  = (int) round($cogs / $tot * 100);
+$w_s  = (int) round($spend / $tot * 100);
+$w_p  = ($profit > 0) ? max(0, 100 - $w_c - $w_s) : 0;
+if ($profit <= 0) { $w_s = 100 - $w_c; }
+$p_cs = ($profit > 0) ? '<i style="width:' . $w_p . '%;background:#16a34a">' . $w_p . '%</i>' : '';
+
+if ($profit >= 0) {
+    $advice = 'Every $1 of ads brings back $' . $fm($roas, 2) . ' of revenue and $' . $fm($profit / max($spend, 0.01), 2) . ' of profit. At a ' . $fm($gm * 100, 0) . '% margin the campaign only needs a ROAS of ' . $fm($be_roas, 2) . 'x to break even.';
+} else {
+    $advice = 'The campaign loses $' . $fm(-$profit) . '. At a ' . $fm($gm * 100, 0) . '% margin you need a ROAS of at least ' . $fm($be_roas, 2) . 'x to break even, and this one reaches ' . $fm($roas, 2) . 'x. Lower the cost per click, lift conversion or raise the order value.';
+}
+
+// display strings
+$ch_name    = $names[$ch];
+$ctr_f      = $fm($ctr, 1);
+$conv_f     = $fm($cv * 100, 1);
+$imps       = $fm($imps_r);
+$clicks     = $fm($clicks_r);
+$orders     = $fm($orders_r);
+$revenue_f  = $fm($revenue);
+$spend_f    = $fm($spend);
+$cogs_f     = $fm($cogs);
+$profit_f   = ($profit < 0 ? '-$' : '$') . $fm(abs($profit));
+$roi_f      = $fm($roi, 1) . '%';
+$roas_f     = $fm($roas, 2) . 'x';
+$be_roas_f  = $fm($be_roas, 2) . 'x';
+$cpa_f      = '$' . $fm($cpa, 2);
+$profit_lab = ($profit >= 0) ? 'Campaign profit' : 'Campaign loss';
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-mkt{--a:#be123c;--a2:#fb7185;--soft:#fff1f2;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-mkt *{box-sizing:border-box}
+.cbx-mkt .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-mkt .cbx-c12{grid-column:span 12}.cbx-mkt .cbx-c6{grid-column:span 6}.cbx-mkt .cbx-c4{grid-column:span 4}.cbx-mkt .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-mkt .cbx-c6,.cbx-mkt .cbx-c4,.cbx-mkt .cbx-c3{grid-column:span 12}}
+.cbx-mkt .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-mkt .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-mkt .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-mkt .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-mkt .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-mkt .cbx-card .form-control,.cbx-mkt .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-mkt .cbx-card .form-control:focus,.cbx-mkt .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #be123c33;outline:0}
+.cbx-mkt .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-mkt .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-mkt .cbx-card textarea.form-control{min-height:90px}
+.cbx-mkt .cbx-card .radio,.cbx-mkt .cbx-card .checkbox{margin:0}
+.cbx-mkt .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-mkt .cbx-card div[style*="float"]{float:none!important}
+.cbx-mkt .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-mkt .cbx-card label.radio,.cbx-mkt .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#be123c,#fb7185);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #be123c44;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #be123c55}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #be123c66;outline-offset:2px}
+.cbx-mkt-res{--a:#be123c;--a2:#fb7185;--soft:#fff1f2;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-mkt-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-mkt-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #be123c33}
+.cbx-mkt-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-mkt-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-mkt-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-mkt-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-mkt-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-mkt-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-mkt-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-mkt-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-mkt-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-mkt-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-mkt-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-mkt-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-mkt-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-mkt-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-mkt-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-mkt-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-mkt-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-mkt-res .cbx-row:last-child{border-bottom:0}
+.cbx-mkt-res .cbx-row b{font-weight:700}
+.cbx-mkt-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-mkt-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-mkt-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-mkt-res .cbx-table .r{text-align:right}
+.cbx-mkt-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-mkt-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-mkt-res .cbx-gauge i{display:block;height:100%}
+.cbx-mkt-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-mkt-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-mkt-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-mkt-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-mkt-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-mkt-res .cbx-col .sa{background:var(--a)}
+.cbx-mkt-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-mkt-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-mkt-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-mkt-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-mkt-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-mkt-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-mkt-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-mkt"><div class="cbx-grid">
+<div class="cbx-sec">Campaign</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Ad spend ($)</label>##adspend##<div class="cbx-h">Total budget for the campaign.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Channel</label>##channel##<div class="cbx-h">Sets the typical click-through rate used to estimate impressions.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Cost per click ($)</label>##cpc##<div class="cbx-h">Typical: Google Ads 1.40, Facebook 1.00, LinkedIn 5.50, Email 0.30.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Conversion rate (%)</label>##conv##<div class="cbx-h">Share of clicks that become orders.</div></div></div>
+<div class="cbx-sec">Your economics</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Average order value ($)</label>##aov##<div class="cbx-h">Revenue per order.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Gross margin (%)</label>##margin##<div class="cbx-h">Share of revenue left after the cost of goods.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<div class="cbx-mkt-res">
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-sack-dollar" aria-hidden="true"></i></div><div class="cbx-lab">##profit_lab##</div><div class="cbx-val">##profit_f##</div><div class="cbx-sub">After ad spend and cost of goods</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-chart-line" aria-hidden="true"></i></div><div class="cbx-lab">Return on investment</div><div class="cbx-val">##roi_f##</div><div class="cbx-sub">Profit divided by ad spend</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-bullhorn" aria-hidden="true"></i></div><div class="cbx-lab">Return on ad spend</div><div class="cbx-val">##roas_f##</div><div class="cbx-sub">Revenue per $1 of ads. Break-even: ##be_roas_f##</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-computer-mouse" aria-hidden="true"></i></div><div class="cbx-lab">Clicks</div><div class="cbx-val">##clicks##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-cart-shopping" aria-hidden="true"></i></div><div class="cbx-lab">Orders</div><div class="cbx-val">##orders##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-receipt" aria-hidden="true"></i></div><div class="cbx-lab">Revenue</div><div class="cbx-val">$##revenue_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-user-tag" aria-hidden="true"></i></div><div class="cbx-lab">Cost per acquisition</div><div class="cbx-val">##cpa_f##</div></div>
+</div>
+<style>
+.cbx-mkt-res .fn{display:flex;flex-direction:column;align-items:center}
+.cbx-mkt-res .fn-b{display:flex;align-items:center;justify-content:space-between;gap:.8rem;color:#fff;border-radius:12px;padding:.75rem 1.1rem;font-weight:700}
+.cbx-mkt-res .fn-b span{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-mkt-res .fn-b b{font-size:1.4rem;line-height:1.1}
+.cbx-mkt-res .fn-r{font-size:.82rem;color:var(--muted);padding:.35rem 0}
+.cbx-mkt-res .fn-r b{color:var(--a)}
+.cbx-mkt-res .split{display:flex;height:34px;border-radius:999px;overflow:hidden}
+.cbx-mkt-res .split i{display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:.82rem;color:#fff;min-width:0;overflow:hidden}
+@media(max-width:560px){.cbx-mkt-res .fn-b b{font-size:1.15rem}.cbx-mkt-res .fn-b{padding:.65rem .85rem}}
+</style><div class="cbx-panel"><h4>Campaign funnel (##ch_name##, typical ##ctr_f##% click-through)</h4><div class="fn"><div class="fn-b" style="width:100%;background:#9f1239"><span>Impressions</span><b>##imps##</b></div><div class="fn-r">&#9660; <b>##ctr_f##%</b> click-through rate</div><div class="fn-b" style="width:74%;background:#e11d48"><span>Clicks</span><b>##clicks##</b></div><div class="fn-r">&#9660; <b>##conv_f##%</b> conversion rate</div><div class="fn-b" style="width:48%;background:#fb7185"><span>Orders</span><b>##orders##</b></div></div><p class="cbx-note" style="border:0;padding:.6rem 0 0;margin:0;text-align:center">Bar widths show the funnel steps, not exact proportions.</p></div><div class="cbx-panel"><h4>Where the revenue goes</h4><div class="split" role="img" aria-label="Revenue split between cost of goods, ad spend and profit"><i style="width:##w_c##%;background:#64748b">##w_c##%</i><i style="width:##w_s##%;background:#e11d48">##w_s##%</i>##p_cs##</div><div class="cbx-legend"><span><i style="background:#64748b"></i>Cost of goods $##cogs_f##</span><span><i style="background:#e11d48"></i>Ad spend $##spend_f##</span><span><i style="background:#16a34a"></i>Profit ##profit_f##</span></div><p style="margin:.7rem 0 0">##advice##</p></div>
+<p class="cbx-note">ROI = (gross profit - ad spend) / ad spend. Impressions are estimated from typical click-through rates per channel; use your own analytics for real campaigns.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Calculate ROI]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[193]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[41]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[adspend]]></var>
+                                    <name><![CDATA[Ad spend]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[5000]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[194]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[41]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[channel]]></var>
+                                    <name><![CDATA[Channel]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[google]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Google Ads (typical CTR 3.5%)]]></name>
+                            <value><![CDATA[google]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Facebook (typical CTR 1.0%)]]></name>
+                            <value><![CDATA[facebook]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[LinkedIn (typical CTR 0.6%)]]></name>
+                            <value><![CDATA[linkedin]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Email (typical CTR 2.5%)]]></name>
+                            <value><![CDATA[email]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[195]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[41]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[cpc]]></var>
+                                    <name><![CDATA[Cost per click]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[1.40]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[196]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[41]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[conv]]></var>
+                                    <name><![CDATA[Conversion rate]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[4.5]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[197]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[41]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[4]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[aov]]></var>
+                                    <name><![CDATA[Average order value]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[95]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[198]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[41]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[5]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[margin]]></var>
+                                    <name><![CDATA[Gross margin]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[55]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+        </calculator>

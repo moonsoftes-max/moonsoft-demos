@@ -1,0 +1,643 @@
+<calculator> <utility>
+            <id><![CDATA[37]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Event Catering Estimator]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Event Catering Estimator (spreadsheet powered) ----
+// Fields: $guests, $hours (Number), $menu (List 1-4), $service (Radio 1/2), $openbar (Yes/No),
+// $extra_staff (Number), $venue (List 1-3). The workbook holds the price tables and does the maths.
+// The //[EXCEL] marker below is replaced by Calc Builder with the code that writes the inputs into
+// B5:B11, recalculates the workbook and reads the result cells (B14:B24) back into PHP variables.
+
+// clean the inputs and turn the Yes/No checkbox into the 1/0 the sheet expects
+$guests      = max(0, (int) $guests);
+$hours       = max(0, (float) $hours);
+$menu        = min(4, max(1, (int) $menu));
+$service     = ((int) $service === 2) ? 2 : 1;
+$extra_staff = max(0, (int) $extra_staff);
+$venue       = min(3, max(1, (int) $venue));
+$bar_flag    = (isset($openbar) && $openbar === 'Y') ? 1 : 0;
+
+//[EXCEL]
+
+// $objPHPExcel is the recalculated workbook; mapped outputs came back as formatted text ("14,358.52")
+$num = function ($v) { return (float) str_replace([',', '%', ' '], '', (string) $v); };
+$eur = function ($v, $d = 0) { return number_format((float) $v, $d, '.', ','); };
+
+$c_food  = $num($food);
+$c_drink = $num($drinks);
+$c_staff = $num($staff_cost);
+$c_venue = $num($venue_fee);
+$c_up    = $num($uplift);
+$c_sub   = $num($subtotal);
+$c_vat   = $num($vat);
+$c_total = $num($total);
+$c_pg    = $num($per_guest);
+$n_staff = (int) $num($staff_n);
+$n_wait  = $n_staff - $extra_staff;
+$price_head = $num($menu_price);
+
+$menu_names  = [1 => 'Buffet', 2 => '3-course seated dinner', 3 => 'Cocktail canapes', 4 => 'BBQ'];
+$venue_names = [1 => 'indoor hall', 2 => 'outdoor / garden', 3 => 'marquee'];
+$menu_name   = $menu_names[$menu];
+$venue_name  = $venue_names[$venue];
+$service_name = ($service === 2) ? 'Premium service' : 'Standard service';
+
+// cost breakdown: one bar per cost line, sized by its share of the total
+$lines = [
+    ['Food',            $c_food,  $menu_name . ' at &euro;' . $eur($price_head, 2) . ' per head'],
+    ['Drinks',          $c_drink, $bar_flag ? 'Open bar for ' . rtrim(rtrim(number_format($hours, 1), '0'), '.') . ' h' : 'No open bar'],
+    ['Staff',           $c_staff, $n_wait . ' waiters + ' . $extra_staff . ' extra, incl. set-up time'],
+    ['Venue',           $c_venue, ucfirst($venue_name) . ' hire fee'],
+    ['Service uplift',  $c_up,    $service_name . ' on food, drinks and staff'],
+    ['VAT',             $c_vat,   'On the whole subtotal'],
+];
+$rows = '';
+foreach ($lines as [$lab, $val, $desc]) {
+    if ($lab === 'Service uplift' && $val <= 0) { continue; }
+    $p = $c_total > 0 ? $val / $c_total * 100 : 0;
+    $cls = ($val > 0) ? '' : ' off';
+    $rows .= '<div class="cat-row' . $cls . '"><div class="cat-h"><span class="cat-n">' . $lab . '<small>' . $desc . '</small></span>'
+           . '<span class="cat-v"><b>&euro;' . $eur($val) . '</b><em>' . number_format($p, 1) . '%</em></span></div>'
+           . '<div class="cbx-bar"><span style="width:' . round($p, 1) . '%"></span></div></div>';
+}
+$breakdown = $rows;
+
+// display strings (overwrite in place, like the other examples)
+$total_f   = $eur($c_total, 2);
+$pg_f      = $eur($c_pg, 2);
+$sub_f     = $eur($c_sub);
+$ph_f      = $eur($price_head, 2);
+$pgh_f     = $eur($hours > 0 ? $c_pg / $hours : 0, 2);
+$hours_f   = rtrim(rtrim(number_format($hours, 1), '0'), '.');
+$guests_f  = $eur($guests);
+$staff_txt = $n_staff . ' people';
+$staff_sub = $n_wait . ' waiters + ' . $extra_staff . ' extra';
+$hero_note = $guests_f . ' guests for ' . $hours_f . ' hours, VAT included';
+$hero_pg   = $menu_name . ' &middot; ' . $service_name . ($bar_flag ? ' &middot; open bar' : '');
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-cat{--a:#be123c;--a2:#fb7185;--soft:#fff1f2;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-cat *{box-sizing:border-box}
+.cbx-cat .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-cat .cbx-c12{grid-column:span 12}.cbx-cat .cbx-c6{grid-column:span 6}.cbx-cat .cbx-c4{grid-column:span 4}.cbx-cat .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-cat .cbx-c6,.cbx-cat .cbx-c4,.cbx-cat .cbx-c3{grid-column:span 12}}
+.cbx-cat .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-cat .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-cat .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-cat .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-cat .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-cat .cbx-card .form-control,.cbx-cat .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-cat .cbx-card .form-control:focus,.cbx-cat .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #be123c33;outline:0}
+.cbx-cat .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-cat .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-cat .cbx-card textarea.form-control{min-height:90px}
+.cbx-cat .cbx-card .radio,.cbx-cat .cbx-card .checkbox{margin:0}
+.cbx-cat .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-cat .cbx-card div[style*="float"]{float:none!important}
+.cbx-cat .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-cat .cbx-card label.radio,.cbx-cat .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#be123c,#fb7185);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #be123c44;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #be123c55}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #be123c66;outline-offset:2px}
+.cbx-cat-res{--a:#be123c;--a2:#fb7185;--soft:#fff1f2;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-cat-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-cat-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #be123c33}
+.cbx-cat-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-cat-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-cat-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-cat-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-cat-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-cat-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-cat-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-cat-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-cat-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-cat-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-cat-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-cat-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-cat-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-cat-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-cat-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-cat-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-cat-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-cat-res .cbx-row:last-child{border-bottom:0}
+.cbx-cat-res .cbx-row b{font-weight:700}
+.cbx-cat-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-cat-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-cat-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-cat-res .cbx-table .r{text-align:right}
+.cbx-cat-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-cat-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-cat-res .cbx-gauge i{display:block;height:100%}
+.cbx-cat-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-cat-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-cat-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-cat-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-cat-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-cat-res .cbx-col .sa{background:var(--a)}
+.cbx-cat-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-cat-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-cat-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-cat-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-cat-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-cat-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-cat-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-cat"><div class="cbx-grid">
+<div class="cbx-sec">The event</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Number of guests</label>##guests##<div class="cbx-h">Adults attending the event.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Event duration (hours)</label>##hours##<div class="cbx-h">Guest-facing hours; staff set-up and clear-down time is added on top.</div></div></div>
+<div class="cbx-sec">Menu and service</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Menu</label>##menu##<div class="cbx-h">Price per head comes from the price table in the workbook.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Service level</label>##service##<div class="cbx-h">Premium adds a 15% uplift on food, drinks and staff.</div></div></div>
+<div class="cbx-sec">Bar, staff and venue</div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Open bar</label>##openbar##<div class="cbx-h">Tick to include drinks for every guest for the whole event.<script>(function(){var e=document.querySelector('input[fldname=openbar]');if(e){e.checked=true;}})();</script></div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Extra staff</label>##extra_staff##<div class="cbx-h">Bartenders or coordinators on top of one waiter per 20 guests.</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Venue type</label>##venue##<div class="cbx-h">Each venue type has its own hire fee.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<div class="cbx-cat-res">
+<p style="margin:0 0 .8rem"><span class="cbx-badge">Powered by an Excel workbook</span></p>
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-champagne-glasses" aria-hidden="true"></i></div><div class="cbx-lab">Estimated total</div><div class="cbx-val">&euro;##total_f##</div><div class="cbx-sub">##hero_note##</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-user-group" aria-hidden="true"></i></div><div class="cbx-lab">Cost per guest</div><div class="cbx-val">&euro;##pg_f##</div><div class="cbx-sub">##hero_pg##</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-utensils" aria-hidden="true"></i></div><div class="cbx-lab">Menu price per head</div><div class="cbx-val">&euro;##ph_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-people-carry-box" aria-hidden="true"></i></div><div class="cbx-lab">Staff on site</div><div class="cbx-val">##staff_txt##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-clock" aria-hidden="true"></i></div><div class="cbx-lab">Per guest per hour</div><div class="cbx-val">&euro;##pgh_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-receipt" aria-hidden="true"></i></div><div class="cbx-lab">Subtotal before VAT</div><div class="cbx-val">&euro;##sub_f##</div></div>
+</div>
+<style>
+.cbx-cat-res .cat-row{padding:.6rem 0;border-bottom:1px dashed var(--line)}
+.cbx-cat-res .cat-row:last-of-type{border-bottom:0}
+.cbx-cat-res .cat-h{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;margin-bottom:.4rem}
+.cbx-cat-res .cat-n{font-weight:700;font-size:.98rem;min-width:0}
+.cbx-cat-res .cat-n small{display:block;font-weight:400;color:var(--muted);font-size:.8rem;margin-top:.1rem}
+.cbx-cat-res .cat-v{display:flex;align-items:baseline;gap:.7rem;white-space:nowrap}
+.cbx-cat-res .cat-v b{font-size:1.05rem}
+.cbx-cat-res .cat-v em{font-style:normal;color:var(--muted);font-size:.82rem;min-width:2.9rem;text-align:right}
+.cbx-cat-res .cat-row.off{opacity:.45}
+.cbx-cat-res .cat-tot{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;margin-top:.5rem;padding-top:.8rem;border-top:2px solid var(--a);font-weight:800;font-size:1.1rem}
+.cbx-cat-res .cat-tot span:last-child{color:var(--a);font-size:1.3rem}
+@media(max-width:480px){.cbx-cat-res .cbx-panel{padding:1rem .85rem}.cbx-cat-res .cat-v em{min-width:2.6rem}}
+</style><div class="cbx-panel"><h4>Where the money goes</h4>##breakdown##<div class="cat-tot"><span>Total incl. VAT</span><span>&euro;##total_f##</span></div></div>
+<p class="cbx-note">Illustrative prices from the downloadable workbook (menu, venue, staff rate and 10% VAT are editable there). Real quotes vary by region, season and supplier. Treat this as a budgeting estimate, not an offer.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Estimate my event]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[169]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[37]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[guests]]></var>
+                                    <name><![CDATA[Number of guests]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[80]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[170]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[37]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[hours]]></var>
+                                    <name><![CDATA[Event duration]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[5]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[171]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[37]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[menu]]></var>
+                                    <name><![CDATA[Menu]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[2]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Buffet]]></name>
+                            <value><![CDATA[1]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[3-course seated dinner]]></name>
+                            <value><![CDATA[2]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Cocktail canapes]]></name>
+                            <value><![CDATA[3]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[BBQ]]></name>
+                            <value><![CDATA[4]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[172]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[37]]></idobj>
+                                    <type><![CDATA[12]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[service]]></var>
+                                    <name><![CDATA[Service level]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[2]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Standard]]></name>
+                            <value><![CDATA[1]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Premium (+15%)]]></name>
+                            <value><![CDATA[2]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[173]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[37]]></idobj>
+                                    <type><![CDATA[3]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[4]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[openbar]]></var>
+                                    <name><![CDATA[Open bar]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[Y]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[174]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[37]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[5]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[extra_staff]]></var>
+                                    <name><![CDATA[Extra staff]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[2]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[175]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[37]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[6]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[venue]]></var>
+                                    <name><![CDATA[Venue type]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[3]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Indoor hall]]></name>
+                            <value><![CDATA[1]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Outdoor / garden]]></name>
+                            <value><![CDATA[2]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Marquee]]></name>
+                            <value><![CDATA[3]]></value> </multivalue>
+                                    </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+                <excel>
+                        <id><![CDATA[8]]></id>
+                            <idobj><![CDATA[37]]></idobj>
+                            <excelfile><![CDATA[3340_event_catering_model.xlsx]]></excelfile>
+                            <excelexec><![CDATA[2]]></excelexec>
+                            <cache><![CDATA[0]]></cache>
+                            <htmloutput><![CDATA[0]]></htmloutput>
+                            <pdfoutput><![CDATA[0]]></pdfoutput>
+                            <htmloutputpage><![CDATA[0]]></htmloutputpage>
+                            <pdfoutputpage><![CDATA[0]]></pdfoutputpage>
+                            <exceloutput><![CDATA[0]]></exceloutput>
+                            <locale><![CDATA[en_uk]]></locale>
+                    </excel>
+        <excelmapping>
+                            <mapping>
+                                        <id><![CDATA[95]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B5]]></cell>
+                                            <phpvar><![CDATA[guests]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[96]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B6]]></cell>
+                                            <phpvar><![CDATA[hours]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[97]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B7]]></cell>
+                                            <phpvar><![CDATA[menu]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[98]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B8]]></cell>
+                                            <phpvar><![CDATA[service]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[99]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B9]]></cell>
+                                            <phpvar><![CDATA[bar_flag]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[100]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B10]]></cell>
+                                            <phpvar><![CDATA[extra_staff]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[101]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B11]]></cell>
+                                            <phpvar><![CDATA[venue]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[102]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B14]]></cell>
+                                            <phpvar><![CDATA[food]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[103]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B15]]></cell>
+                                            <phpvar><![CDATA[drinks]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[104]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B16]]></cell>
+                                            <phpvar><![CDATA[staff_cost]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[105]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B17]]></cell>
+                                            <phpvar><![CDATA[venue_fee]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[106]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B18]]></cell>
+                                            <phpvar><![CDATA[uplift]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[107]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B19]]></cell>
+                                            <phpvar><![CDATA[subtotal]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[108]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B20]]></cell>
+                                            <phpvar><![CDATA[vat]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[109]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B21]]></cell>
+                                            <phpvar><![CDATA[total]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[110]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B22]]></cell>
+                                            <phpvar><![CDATA[per_guest]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[111]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B23]]></cell>
+                                            <phpvar><![CDATA[staff_n]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[112]]></id>
+                                            <idexcel><![CDATA[8]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B24]]></cell>
+                                            <phpvar><![CDATA[menu_price]]></phpvar>
+                                    </mapping>
+                        </excelmapping>
+        </calculator>

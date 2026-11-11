@@ -1,0 +1,570 @@
+<calculator> <utility>
+            <id><![CDATA[47]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Flooring Material Estimator]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Flooring Material Estimator (spreadsheet powered) ----
+// The workbook holds the price table (Prices sheet) and does the maths (Estimator sheet). The //[EXCEL] marker below
+// is replaced by Calc Builder with code that writes the five inputs into B4:B8, recalculates the workbook and reads
+// ten result cells back into PHP variables ($floor_name ... $area_bought).
+// Afterwards $objPHPExcel is the loaded workbook, so we can also read the Prices sheet for the comparison.
+
+//[EXCEL]
+
+// mapped output cells come back as *formatted* text ("1,924.56", "13.0"): strip separators before arithmetic
+$num = function ($v) { return (float) str_replace([',', '%', ' '], '', (string) $v); };
+
+$area   = $num($room_area);
+$waste  = $num($waste_total);
+$buy    = $num($area_buy);
+$packs_n = (int) round($num($packs));
+$cover  = $num($pack_cov);
+$cost   = $num($total_cost);
+$cost_sq = $num($cost_m2);
+$bought = $num($area_bought);
+$extra  = max(0, $bought - $area);                       // flooring left over after the job
+
+// the Prices sheet: one row per floor type, columns G/H already recalculated for this room by the workbook
+$prices = $objPHPExcel->getSheet(1);
+$cmp = [];
+$max = 0;
+$min = null;
+for ($r = 2; $r <= 5; $r++) {
+    $nm = (string) $prices->getCell("B$r")->getValue();
+    $c  = (float) $prices->getCell("H$r")->getCalculatedValue();
+    $pk = (int) $prices->getCell("G$r")->getCalculatedValue();
+    $pm = (float) $prices->getCell("C$r")->getCalculatedValue();
+    $cmp[] = [$nm, $c, $pk, $pm];
+    $max = max($max, $c);
+    if ($min === null || $c < $min) { $min = $c; }
+}
+$bars = '';
+$cheapest = '';
+foreach ($cmp as [$nm, $c, $pk, $pm]) {
+    $w   = $max > 0 ? round($c / $max * 100, 1) : 0;
+    $on  = ($nm === (string) $floor_name);
+    $low = (abs($c - $min) < 0.005);
+    if ($low) { $cheapest = $nm; }
+    $bars .= '<div class="fl-row' . ($on ? ' on' : '') . '"><div class="fl-top"><span class="fl-n">' . $nm
+           . ($on ? ' <em>your choice</em>' : '') . ($low ? ' <u>lowest</u>' : '') . '</span>'
+           . '<span class="fl-v">$' . number_format($c, 2, '.', ',') . '</span></div>'
+           . '<div class="fl-bar"><i style="width:' . $w . '%"></i></div>'
+           . '<div class="fl-s">' . $pk . ' packs at $' . number_format($pm, 2, '.', ',') . ' per m&sup2;</div></div>';
+}
+$cmp_bars = $bars;
+$cmp_note = 'Same room, same layout (' . strtolower($layout_name) . '), priced on every floor type in the workbook. Lowest total: ' . $cheapest . '.';
+
+// room sketch: the rectangle keeps the room's proportions; the pattern follows the layout, the colour the floor type
+$L = max(0.5, (float) $room_len);
+$W = max(0.5, (float) $room_wid);
+$ratio = round(max(0.6, min(2.6, $L / $W)), 3);
+$tones = ['1' => ['#d9b98d', '#bd9a6c'], '2' => ['#cbc4ba', '#a99f92'], '3' => ['#b57e52', '#8f5c36'], '4' => ['#e2e6eb', '#b4bcc7']];
+$tn = isset($tones[(string) $ftype]) ? $tones[(string) $ftype] : $tones['3'];
+$is_tile = ((string) $ftype === '4');
+$seam = 'rgba(15,23,42,.22)';
+if ($pattern === '3') {            // herringbone: chevron
+    $room_bg = 'background-color:' . $tn[0] . ';background-image:linear-gradient(135deg,' . $tn[1] . ' 25%,transparent 25%),linear-gradient(225deg,' . $tn[1]
+             . ' 25%,transparent 25%),linear-gradient(315deg,' . $tn[1] . ' 25%,transparent 25%),linear-gradient(45deg,' . $tn[1] . ' 25%,transparent 25%);'
+             . 'background-size:44px 44px;background-position:-22px 0,-22px 0,0 0,0 0';
+} elseif ($pattern === '2') {      // diagonal
+    $room_bg = 'background-color:' . $tn[0] . ';background-image:repeating-linear-gradient(45deg,' . $seam . ' 0 2px,transparent 2px ' . ($is_tile ? '40px' : '20px') . ')'
+             . ($is_tile ? ',repeating-linear-gradient(-45deg,' . $seam . ' 0 2px,transparent 2px 40px)' : '');
+} else {                           // straight
+    $room_bg = 'background-color:' . $tn[0] . ';background-image:repeating-linear-gradient(0deg,' . $seam . ' 0 2px,transparent 2px ' . ($is_tile ? '40px' : '20px') . ')'
+             . ($is_tile ? ',repeating-linear-gradient(90deg,' . $seam . ' 0 2px,transparent 2px 40px)' : '');
+}
+$room_ratio = $ratio;
+$room_dims  = number_format($L, 2, '.', ',') . ' &times; ' . number_format($W, 2, '.', ',') . ' m';
+$alc        = (float) $alcove;
+$room_sum   = $room_dims . ($alc > 0 ? ' + ' . number_format($alc, 2, '.', ',') . ' m&sup2; alcove' : '') . ' = ' . number_format($area, 2, '.', ',') . ' m&sup2;';
+
+// display strings (overwrite in place, as in the other examples)
+$room_area   = number_format($area, 2, '.', ',');
+$waste_txt   = number_format($waste, 1, '.', ',');
+$area_buy    = number_format($buy, 2, '.', ',');
+$packs       = number_format($packs_n);
+$pack_cov    = number_format($cover, 2, '.', ',');
+$area_bought = number_format($bought, 2, '.', ',');
+$extra_txt   = number_format($extra, 2, '.', ',');
+$total_cost  = number_format($cost, 2, '.', ',');
+$cost_m2     = number_format($cost_sq, 2, '.', ',');
+$packs_word  = ($packs_n == 1) ? 'pack' : 'packs';
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-floor{--a:#b45309;--a2:#fbbf24;--soft:#fffbeb;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-floor *{box-sizing:border-box}
+.cbx-floor .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-floor .cbx-c12{grid-column:span 12}.cbx-floor .cbx-c6{grid-column:span 6}.cbx-floor .cbx-c4{grid-column:span 4}.cbx-floor .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-floor .cbx-c6,.cbx-floor .cbx-c4,.cbx-floor .cbx-c3{grid-column:span 12}}
+.cbx-floor .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-floor .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-floor .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-floor .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-floor .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-floor .cbx-card .form-control,.cbx-floor .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-floor .cbx-card .form-control:focus,.cbx-floor .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #b4530933;outline:0}
+.cbx-floor .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-floor .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-floor .cbx-card textarea.form-control{min-height:90px}
+.cbx-floor .cbx-card .radio,.cbx-floor .cbx-card .checkbox{margin:0}
+.cbx-floor .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-floor .cbx-card div[style*="float"]{float:none!important}
+.cbx-floor .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-floor .cbx-card label.radio,.cbx-floor .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#b45309,#fbbf24);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #b4530944;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #b4530955}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #b4530966;outline-offset:2px}
+.cbx-floor-res{--a:#b45309;--a2:#fbbf24;--soft:#fffbeb;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-floor-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-floor-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #b4530933}
+.cbx-floor-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-floor-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-floor-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-floor-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-floor-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-floor-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-floor-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-floor-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-floor-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-floor-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-floor-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-floor-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-floor-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-floor-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-floor-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-floor-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-floor-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-floor-res .cbx-row:last-child{border-bottom:0}
+.cbx-floor-res .cbx-row b{font-weight:700}
+.cbx-floor-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-floor-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-floor-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-floor-res .cbx-table .r{text-align:right}
+.cbx-floor-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-floor-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-floor-res .cbx-gauge i{display:block;height:100%}
+.cbx-floor-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-floor-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-floor-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-floor-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-floor-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-floor-res .cbx-col .sa{background:var(--a)}
+.cbx-floor-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-floor-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-floor-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-floor-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-floor-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-floor-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-floor-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-floor"><div class="cbx-grid">
+<div class="cbx-sec">Your room</div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Room length (m)</label>##room_len##<div class="cbx-h">The longer side of the main rectangle.</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Room width (m)</label>##room_wid##<div class="cbx-h">The shorter side.</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Extra alcove area (m&sup2;)</label>##alcove##<div class="cbx-h">Bay windows, closets or niches that also get floor. Use 0 if none.</div></div></div>
+<div class="cbx-sec">Your floor</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Floor type</label>##ftype##<div class="cbx-h">Each type has its own price per m&sup2;, pack size and waste allowance in the workbook.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Layout pattern</label>##pattern##<div class="cbx-h">Diagonal and herringbone cut more boards, so they add extra waste.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<style>
+.cbx-floor-res .fl-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:1rem;margin-bottom:1rem}
+.cbx-floor-res .fl-two .cbx-panel{margin-bottom:0}
+@media(max-width:820px){.cbx-floor-res .fl-two{grid-template-columns:minmax(0,1fr)}}
+.cbx-floor-res .fl-room{width:100%;max-width:340px;margin:.2rem auto 0;border:7px solid #334155;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25),0 6px 16px rgba(15,23,42,.18)}
+.cbx-floor-res .fl-cap{font-size:.86rem;color:var(--muted);text-align:center;margin:.8rem 0 0}
+.cbx-floor-res .fl-cap b{color:var(--ink)}
+.cbx-floor-res .fl-row{padding:.45rem 0;border-bottom:1px dashed var(--line)}
+.cbx-floor-res .fl-row:last-of-type{border-bottom:0}
+.cbx-floor-res .fl-top{display:flex;justify-content:space-between;gap:.8rem;align-items:baseline;font-size:.95rem}
+.cbx-floor-res .fl-n{font-weight:700}
+.cbx-floor-res .fl-n em{font-style:normal;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;background:var(--a);color:#fff;border-radius:999px;padding:.1rem .5rem;margin-left:.4rem;vertical-align:1px;white-space:nowrap}
+.cbx-floor-res .fl-n u{text-decoration:none;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;background:#dcfce7;color:#166534;border-radius:999px;padding:.1rem .5rem;margin-left:.4rem;vertical-align:1px;white-space:nowrap}
+.cbx-floor-res .fl-v{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cbx-floor-res .fl-bar{height:11px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin:.35rem 0 .25rem}
+.cbx-floor-res .fl-bar i{display:block;height:100%;border-radius:999px;background:#fcd34d}
+.cbx-floor-res .fl-row.on .fl-bar i{background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-floor-res .fl-s{font-size:.8rem;color:var(--muted)}
+.cbx-floor-res .fl-note2{font-size:.82rem;color:var(--muted);margin:.7rem 0 0}
+</style><div class="cbx-floor-res">
+<p style="margin:0 0 .8rem"><span class="cbx-badge">Powered by an Excel workbook</span></p>
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-boxes-stacked" aria-hidden="true"></i></div><div class="cbx-lab">Packs to order</div><div class="cbx-val">##packs##</div><div class="cbx-sub">##packs## ##packs_word## &times; ##pack_cov## m&sup2; = ##area_bought## m&sup2; of flooring</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-sack-dollar" aria-hidden="true"></i></div><div class="cbx-lab">Total cost</div><div class="cbx-val">$##total_cost##</div><div class="cbx-sub">$##cost_m2## per m&sup2; of room</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-vector-square" aria-hidden="true"></i></div><div class="cbx-lab">Room area</div><div class="cbx-val">##room_area## m&sup2;</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-scissors" aria-hidden="true"></i></div><div class="cbx-lab">Waste allowance</div><div class="cbx-val">##waste_txt##%</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-cart-shopping" aria-hidden="true"></i></div><div class="cbx-lab">Area to buy</div><div class="cbx-val">##area_buy## m&sup2;</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-recycle" aria-hidden="true"></i></div><div class="cbx-lab">Left over</div><div class="cbx-val">##extra_txt## m&sup2;</div></div>
+</div>
+<div class="fl-two"><div class="cbx-panel"><h4>##floor_name##, ##layout_name## layout</h4><div class="fl-room" style="aspect-ratio:##room_ratio##;##room_bg##"></div><p class="fl-cap"><b>##room_sum##</b></p></div><div class="cbx-panel"><h4>Total cost on every floor type</h4>##cmp_bars##<p class="fl-note2">##cmp_note##</p></div></div>
+<p class="cbx-note">Every figure comes from the downloadable Excel workbook (prices are illustrative, in US dollars). Packs are rounded up to whole packs.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Estimate my flooring]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[223]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[47]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[room_len]]></var>
+                                    <name><![CDATA[Room length]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[6.5]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[224]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[47]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[room_wid]]></var>
+                                    <name><![CDATA[Room width]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[4.2]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[225]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[47]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[alcove]]></var>
+                                    <name><![CDATA[Extra alcove area]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[2.5]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[226]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[47]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[ftype]]></var>
+                                    <name><![CDATA[Floor type]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[3]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Laminate ($19.90 per m&sup2;)]]></name>
+                            <value><![CDATA[1]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Vinyl plank ($29.90 per m&sup2;)]]></name>
+                            <value><![CDATA[2]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Engineered wood ($54.00 per m&sup2;)]]></name>
+                            <value><![CDATA[3]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Porcelain tile ($38.00 per m&sup2;)]]></name>
+                            <value><![CDATA[4]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[227]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[47]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[4]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[pattern]]></var>
+                                    <name><![CDATA[Layout pattern]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[2]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Straight (no extra waste)]]></name>
+                            <value><![CDATA[1]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Diagonal (+5% waste)]]></name>
+                            <value><![CDATA[2]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Herringbone (+8% waste)]]></name>
+                            <value><![CDATA[3]]></value> </multivalue>
+                                    </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+                <excel>
+                        <id><![CDATA[10]]></id>
+                            <idobj><![CDATA[47]]></idobj>
+                            <excelfile><![CDATA[3817_flooring_material_estimator.xlsx]]></excelfile>
+                            <excelexec><![CDATA[2]]></excelexec>
+                            <cache><![CDATA[0]]></cache>
+                            <htmloutput><![CDATA[0]]></htmloutput>
+                            <pdfoutput><![CDATA[0]]></pdfoutput>
+                            <htmloutputpage><![CDATA[0]]></htmloutputpage>
+                            <pdfoutputpage><![CDATA[0]]></pdfoutputpage>
+                            <exceloutput><![CDATA[0]]></exceloutput>
+                            <locale><![CDATA[en_uk]]></locale>
+                    </excel>
+        <excelmapping>
+                            <mapping>
+                                        <id><![CDATA[149]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B4]]></cell>
+                                            <phpvar><![CDATA[room_len]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[150]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B5]]></cell>
+                                            <phpvar><![CDATA[room_wid]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[151]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B6]]></cell>
+                                            <phpvar><![CDATA[alcove]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[152]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B7]]></cell>
+                                            <phpvar><![CDATA[ftype]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[153]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B8]]></cell>
+                                            <phpvar><![CDATA[pattern]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[154]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B11]]></cell>
+                                            <phpvar><![CDATA[floor_name]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[155]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B12]]></cell>
+                                            <phpvar><![CDATA[layout_name]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[156]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B13]]></cell>
+                                            <phpvar><![CDATA[room_area]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[157]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B16]]></cell>
+                                            <phpvar><![CDATA[waste_total]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[158]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B17]]></cell>
+                                            <phpvar><![CDATA[area_buy]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[159]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B18]]></cell>
+                                            <phpvar><![CDATA[pack_cov]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[160]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B19]]></cell>
+                                            <phpvar><![CDATA[packs]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[161]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B20]]></cell>
+                                            <phpvar><![CDATA[area_bought]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[162]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B22]]></cell>
+                                            <phpvar><![CDATA[total_cost]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[163]]></id>
+                                            <idexcel><![CDATA[10]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B23]]></cell>
+                                            <phpvar><![CDATA[cost_m2]]></phpvar>
+                                    </mapping>
+                        </excelmapping>
+        </calculator>

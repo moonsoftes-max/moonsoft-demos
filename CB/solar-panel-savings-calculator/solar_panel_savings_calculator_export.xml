@@ -1,0 +1,412 @@
+<calculator> <utility>
+            <id><![CDATA[11]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Solar Panel Savings Calculator]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[use Joomla\CMS\Factory;
+
+// ---- Solar Panel Savings calculator ----
+// Inputs (Number fields): $system_size (kW), $cost_per_watt ($/W), $avg_monthly_bill ($),
+// $sunlight_hours (peak sun hours/day), $electricity_rate ($/kWh), $incentive_percent (%)
+
+$size          = (float) $system_size;
+$price_watt    = (float) $cost_per_watt;
+$bill          = (float) $avg_monthly_bill;
+$sun_hours     = (float) $sunlight_hours;
+$rate          = (float) $electricity_rate;
+$incentive_pct = (float) $incentive_percent;
+
+// ---- Core math ----
+$gross_cost      = $size * 1000 * $price_watt;
+$net_cost        = $gross_cost * (1 - $incentive_pct / 100);
+$monthly_kwh     = $size * $sun_hours * 30;
+$monthly_savings = min($monthly_kwh * $rate, $bill);
+$annual_savings  = $monthly_savings * 12;
+$payback_years   = $annual_savings > 0 ? $net_cost / $annual_savings : 0;
+$savings_25yr    = ($annual_savings * 25) - $net_cost;
+
+$incentive_amount = $gross_cost - $net_cost;
+$capped_note = (($monthly_kwh * $rate) > $bill)
+    ? '<br><i class="fa fa-circle-info"></i> Savings are capped at your current average bill &mdash; this system produces more energy than you currently use.'
+    : '';
+
+// ---- Display formatting (overwrite in place, same convention as the Loan Calculator demo) ----
+$gross_cost          = number_format($gross_cost, 0, '.', ',');
+$net_cost             = number_format($net_cost, 0, '.', ',');
+$incentive_amount     = number_format($incentive_amount, 0, '.', ',');
+$monthly_savings      = number_format($monthly_savings, 2, '.', ',');
+$annual_savings       = number_format($annual_savings, 0, '.', ',');
+$savings_25yr         = number_format($savings_25yr, 0, '.', ',');
+$payback_years        = number_format($payback_years, 1, '.', ',');
+$monthly_kwh          = number_format($monthly_kwh, 0, '.', ',');
+$avg_monthly_bill_f   = number_format((float) $avg_monthly_bill, 0, '.', ',');
+$system_size_f        = number_format((float) $system_size, 1, '.', ',');
+$incentive_percent_f  = number_format((float) $incentive_percent, 0, '.', ',');
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#0f766e,#14b8a6);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #0f766e44;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #0f766e55}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #0f766e66;outline-offset:2px}
+</style>
+<div class="solar-calc-form">
+  <style>
+    .solar-calc-form .form-label{font-weight:600;color:#1f2937}
+    .solar-calc-form .form-text{color:#6b7280}
+    .solar-calc-form .scf-group{background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.1rem;height:100%}
+  </style>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="scf-group">
+        <label class="form-label">System Size (kW)</label>
+        ##system_size##
+        <div class="form-text small">Typical residential systems run 4&ndash;10 kW.</div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="scf-group">
+        <label class="form-label">Installation Cost ($/Watt)</label>
+        ##cost_per_watt##
+        <div class="form-text small">Before incentives; U.S. average is roughly $2.50&ndash;$3.50/W.</div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="scf-group">
+        <label class="form-label">Current Average Monthly Bill ($)</label>
+        ##avg_monthly_bill##
+        <div class="form-text small">Your household's typical electricity bill today.</div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="scf-group">
+        <label class="form-label">Average Peak Sun Hours/Day</label>
+        ##sunlight_hours##
+        <div class="form-text small">Check your region's solar irradiance map.</div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="scf-group">
+        <label class="form-label">Utility Electricity Rate ($/kWh)</label>
+        ##electricity_rate##
+        <div class="form-text small">What your utility charges per kWh.</div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="scf-group">
+        <label class="form-label">Federal/Local Incentive (%)</label>
+        ##incentive_percent##
+        <div class="form-text small">U.S. federal solar tax credit is currently 30%.</div>
+      </div>
+    </div>
+  </div>
+</div>
+]]></layout>
+                    <exitlayout><![CDATA[<div class="solar-result">
+  <style>
+    .solar-result{font-family:inherit}
+    .solar-result .sr-hero{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+    .solar-result .sr-hero-card{flex:1 1 260px;border-radius:14px;padding:1.5rem 1.6rem;color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.08)}
+    .solar-result .sr-hero-card.net{background:linear-gradient(135deg,#0f766e,#14b8a6)}
+    .solar-result .sr-hero-card.payback{background:linear-gradient(135deg,#1d4ed8,#3b82f6)}
+    .solar-result .sr-hero-card .sr-icon{font-size:1.5rem;opacity:.85;margin-bottom:.5rem}
+    .solar-result .sr-hero-card .sr-label{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;opacity:.9}
+    .solar-result .sr-hero-card .sr-value{font-size:2.1rem;font-weight:800;line-height:1.2;margin-top:.15rem}
+    .solar-result .sr-hero-card .sr-sub{font-size:.82rem;opacity:.9;margin-top:.4rem}
+    .solar-result .sr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem}
+    .solar-result .sr-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1.1rem 1.25rem;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .solar-result .sr-card .sr-icon{color:#0f766e;font-size:1.25rem;margin-bottom:.4rem}
+    .solar-result .sr-card .sr-label{font-size:.78rem;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}
+    .solar-result .sr-card .sr-value{font-size:1.35rem;font-weight:700;color:#111827;margin-top:.15rem}
+    .solar-result .sr-note{margin-top:1.25rem;font-size:.85rem;color:#6b7280;border-top:1px dashed #e5e7eb;padding-top:.85rem}
+  </style>
+
+  <div class="sr-hero">
+    <div class="sr-hero-card net">
+      <div class="sr-icon"><i class="fa fa-solar-panel"></i></div>
+      <div class="sr-label">Net System Cost After Incentives</div>
+      <div class="sr-value">$##net_cost##</div>
+      <div class="sr-sub">Gross cost $##gross_cost## &minus; $##incentive_amount## incentive (##incentive_percent_f##%)</div>
+    </div>
+    <div class="sr-hero-card payback">
+      <div class="sr-icon"><i class="fa fa-clock"></i></div>
+      <div class="sr-label">Payback Period</div>
+      <div class="sr-value">##payback_years## yrs</div>
+      <div class="sr-sub">Time to recover your investment through energy savings</div>
+    </div>
+  </div>
+
+  <div class="sr-grid">
+    <div class="sr-card">
+      <div class="sr-icon"><i class="fa fa-bolt"></i></div>
+      <div class="sr-label">Monthly Savings</div>
+      <div class="sr-value">$##monthly_savings##</div>
+    </div>
+    <div class="sr-card">
+      <div class="sr-icon"><i class="fa fa-piggy-bank"></i></div>
+      <div class="sr-label">Annual Savings</div>
+      <div class="sr-value">$##annual_savings##</div>
+    </div>
+    <div class="sr-card">
+      <div class="sr-icon"><i class="fa fa-chart-line"></i></div>
+      <div class="sr-label">25-Year Net Savings</div>
+      <div class="sr-value">$##savings_25yr##</div>
+    </div>
+    <div class="sr-card">
+      <div class="sr-icon"><i class="fa fa-sun"></i></div>
+      <div class="sr-label">Monthly Production</div>
+      <div class="sr-value">##monthly_kwh## kWh</div>
+    </div>
+  </div>
+
+  <p class="sr-note"><i class="fa fa-leaf"></i> A ##system_size_f## kW system at your location produces roughly ##monthly_kwh## kWh/month, covering about $##monthly_savings## of your current $##avg_monthly_bill_f## monthly bill.##capped_note##</p>
+</div>
+]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Calculate Savings]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[30]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[11]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[system_size]]></var>
+                                    <name><![CDATA[System Size (kW)]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[6]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[31]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[11]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[cost_per_watt]]></var>
+                                    <name><![CDATA[Installation Cost ($/Watt)]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[2.80]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[32]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[11]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[avg_monthly_bill]]></var>
+                                    <name><![CDATA[Current Average Monthly Bill ($)]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[180]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[33]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[11]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[sunlight_hours]]></var>
+                                    <name><![CDATA[Average Peak Sun Hours/Day]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[5.5]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[34]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[11]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[4]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[electricity_rate]]></var>
+                                    <name><![CDATA[Utility Electricity Rate ($/kWh)]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[0.16]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[35]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[11]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[5]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[incentive_percent]]></var>
+                                    <name><![CDATA[Federal/Local Incentive (%)]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[30]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+        </calculator>

@@ -1,0 +1,437 @@
+<calculator> <utility>
+            <id><![CDATA[32]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Trip Fuel Cost & CO2]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Trip Fuel Cost & CO2 ----
+// $fuel = List value (petrol / diesel / hybrid / electric), $roundtrip = 'Y' when ticked.
+$dist_in = max(0, (float) $distance);
+$cons    = max(0, (float) $consumption);     // L/100 km, or kWh/100 km for electric
+$price   = max(0, (float) $fuelprice);       // $ per L, or $ per kWh for electric
+$pax     = max(1, (int) $passengers);
+$rt      = ($roundtrip === 'Y');
+
+// kg CO2 per litre (or per kWh), and typical consumption / price used for the comparison bars
+$fuels = [
+    'petrol'   => ['Petrol',   2.31, 'L',   7.5, 1.75],
+    'diesel'   => ['Diesel',   2.68, 'L',   6.0, 1.65],
+    'hybrid'   => ['Hybrid',   2.31, 'L',   4.8, 1.75],
+    'electric' => ['Electric', 0.23, 'kWh', 17.0, 0.28],
+];
+$key = isset($fuels[$fuel]) ? $fuel : 'petrol';
+list($fname, $co2f, $unit, , ) = $fuels[$key];
+
+$km      = $dist_in * ($rt ? 2 : 1);
+$energy  = $km * $cons / 100;                // litres or kWh
+$cost    = $energy * $price;
+$co2     = $energy * $co2f;                  // kg
+$cost_pp = $cost / $pax;
+$co2_pp  = $co2 / $pax;
+$trees   = $co2 / 21;                        // one tree absorbs about 21 kg CO2 per year
+$per100  = $km > 0 ? $cost / $km * 100 : 0;
+$gkm     = $km > 0 ? $co2 * 1000 / $km : 0;
+
+// comparison: the selected fuel uses the visitor's own numbers, the others a typical vehicle
+$cmp = [];
+foreach ($fuels as $k => $f) {
+    if ($k === $key) { $c = $cost; $g = $co2; }
+    else { $e = $km * $f[3] / 100; $c = $e * $f[4]; $g = $e * $f[1]; }
+    $cmp[$k] = [$f[0], $c, $g];
+}
+$maxc = 0; $maxg = 0;
+foreach ($cmp as $r) { $maxc = max($maxc, $r[1]); $maxg = max($maxg, $r[2]); }
+$mk = function ($idx, $max, $fmt) use ($cmp, $key) {
+    $out = '';
+    foreach ($cmp as $k => $r) {
+        $w = $max > 0 ? round($r[$idx] / $max * 100, 1) : 0;
+        $cls = ($k === $key) ? ' class="me"' : '';
+        $out .= '<div class="cbx-cmp"><span class="n">' . $r[0] . ($k === $key ? ' (yours)' : '') . '</span>'
+              . '<span class="t"><i' . $cls . ' style="width:' . max($w, 1.5) . '%"></i></span>'
+              . '<span class="v">' . $fmt($r[$idx]) . '</span></div>';
+    }
+    return $out;
+};
+$cmp_cost = $mk(1, $maxc, function ($v) { return '$' . number_format($v, 0, '.', ','); });
+$cmp_co2  = $mk(2, $maxg, function ($v) { return number_format($v, 0, '.', ',') . ' kg'; });
+
+// the lowest-emission option of the four
+$best = $key; $bestg = $cmp[$key][2];
+foreach ($cmp as $k => $r) { if ($r[2] < $bestg) { $best = $k; $bestg = $r[2]; } }
+if ($best === $key) {
+    $advice = $fname . ' is already the lowest-emission option in this comparison.';
+} else {
+    $save_c = $cost - $cmp[$best][1];
+    $save_g = $co2 - $cmp[$best][2];
+    $advice = 'The same trip in a typical ' . strtolower($cmp[$best][0]) . ' vehicle would emit about ' . number_format($save_g, 0, '.', ',')
+            . ' kg less CO2 (' . round($co2 > 0 ? $save_g / $co2 * 100 : 0) . '%) and ' . ($save_c >= 0 ? 'cost about $' . number_format($save_c, 0, '.', ',') . ' less.' : 'cost about $' . number_format(-$save_c, 0, '.', ',') . ' more.');
+}
+
+// display strings
+$energy_f  = number_format($energy, 1, '.', ',');
+$unit_f    = $unit;
+$km_f      = number_format($km, 0, '.', ',');
+$cost_f    = number_format($cost, 2, '.', ',');
+$cost_pp_f = number_format($cost_pp, 2, '.', ',');
+$co2_f     = number_format($co2, 1, '.', ',');
+$co2_pp_f  = number_format($co2_pp, 1, '.', ',');
+$trees_f   = number_format($trees, 1, '.', ',');
+$per100_f  = number_format($per100, 2, '.', ',');
+$gkm_f     = number_format($gkm, 0, '.', ',');
+$fname_f   = $fname;
+$pax_f     = $pax;
+$trip_f    = $rt ? 'Round trip' : 'One way';
+$price_f   = number_format($price, 2, '.', ',');
+$people_f  = $pax == 1 ? '1 person' : $pax . ' people';
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-trip{--a:#0e7490;--a2:#22d3ee;--soft:#ecfeff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-trip *{box-sizing:border-box}
+.cbx-trip .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-trip .cbx-c12{grid-column:span 12}.cbx-trip .cbx-c6{grid-column:span 6}.cbx-trip .cbx-c4{grid-column:span 4}.cbx-trip .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-trip .cbx-c6,.cbx-trip .cbx-c4,.cbx-trip .cbx-c3{grid-column:span 12}}
+.cbx-trip .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-trip .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-trip .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-trip .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-trip .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-trip .cbx-card .form-control,.cbx-trip .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-trip .cbx-card .form-control:focus,.cbx-trip .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #0e749033;outline:0}
+.cbx-trip .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-trip .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-trip .cbx-card textarea.form-control{min-height:90px}
+.cbx-trip .cbx-card .radio,.cbx-trip .cbx-card .checkbox{margin:0}
+.cbx-trip .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-trip .cbx-card div[style*="float"]{float:none!important}
+.cbx-trip .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-trip .cbx-card label.radio,.cbx-trip .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#0e7490,#22d3ee);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #0e749044;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #0e749055}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #0e749066;outline-offset:2px}
+.cbx-trip-res{--a:#0e7490;--a2:#22d3ee;--soft:#ecfeff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-trip-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-trip-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #0e749033}
+.cbx-trip-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-trip-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-trip-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-trip-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-trip-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-trip-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-trip-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-trip-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-trip-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-trip-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-trip-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-trip-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-trip-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-trip-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-trip-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-trip-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-trip-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-trip-res .cbx-row:last-child{border-bottom:0}
+.cbx-trip-res .cbx-row b{font-weight:700}
+.cbx-trip-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-trip-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-trip-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-trip-res .cbx-table .r{text-align:right}
+.cbx-trip-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-trip-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-trip-res .cbx-gauge i{display:block;height:100%}
+.cbx-trip-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-trip-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-trip-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-trip-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-trip-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-trip-res .cbx-col .sa{background:var(--a)}
+.cbx-trip-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-trip-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-trip-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-trip-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-trip-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-trip-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-trip-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-trip"><div class="cbx-grid">
+<div class="cbx-sec">The trip</div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Distance (km, one way)</label>##distance##<div class="cbx-h">Length of the journey in kilometres.</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Passengers</label>##passengers##<div class="cbx-h">People sharing the vehicle, driver included.</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Round trip?</label>##roundtrip##<div class="cbx-h">Ticked: the distance is doubled for the way back.</div></div></div>
+<div class="cbx-sec">Vehicle and fuel</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Fuel type</label>##fuel##<div class="cbx-h">Each option shows its CO&#8322; emissions per litre or kWh.</div></div></div>
+<div class="cbx-c3"><div class="cbx-card"><label class="cbx-l">Consumption per 100 km</label>##consumption##<div class="cbx-h">Litres per 100 km, or kWh per 100 km if electric.</div></div></div>
+<div class="cbx-c3"><div class="cbx-card"><label class="cbx-l">Fuel price ($ per unit)</label>##fuelprice##<div class="cbx-h">Price per litre, or per kWh when charging.</div></div></div>
+</div></div><script>(function(){var c=document.querySelector('input[fldname="roundtrip"]');if(c&&!c.dataset.cbxInit){c.dataset.cbxInit=1;c.checked=true;}})();</script>]]></layout>
+                    <exitlayout><![CDATA[<style>.cbx-trip-res .cbx-metrics{grid-template-columns:repeat(3,1fr)}.cbx-trip-res .cbx-cmpgrid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem 2rem}.cbx-trip-res .cbx-cmpgrid h5{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 .5rem}.cbx-trip-res .cbx-cmp{display:flex;align-items:center;gap:.7rem;padding:.3rem 0;font-size:.9rem}.cbx-trip-res .cbx-cmp .n{flex:0 0 7.6rem}.cbx-trip-res .cbx-cmp .t{flex:1;height:14px;border-radius:999px;background:#e2e8f0;overflow:hidden;min-width:0}.cbx-trip-res .cbx-cmp .t i{display:block;height:100%;border-radius:999px;background:#94a3b8}.cbx-trip-res .cbx-cmp .t i.me{background:linear-gradient(90deg,var(--a2),var(--a))}.cbx-trip-res .cbx-cmp .v{flex:0 0 4.4rem;text-align:right;font-weight:700}@media(max-width:768px){.cbx-trip-res .cbx-cmpgrid{grid-template-columns:1fr}}@media(max-width:600px){.cbx-trip-res .cbx-metrics{grid-template-columns:repeat(2,1fr)}.cbx-trip-res .cbx-cmp .n{flex-basis:6.4rem}.cbx-trip-res .cbx-cmp .v{flex-basis:3.8rem}}</style><div class="cbx-trip-res">
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-gas-pump" aria-hidden="true"></i></div><div class="cbx-lab">Energy used</div><div class="cbx-val">##energy_f## ##unit_f##</div><div class="cbx-sub">##fname_f## &middot; ##km_f## km (##trip_f##)</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-wallet" aria-hidden="true"></i></div><div class="cbx-lab">Trip cost</div><div class="cbx-val">$##cost_f##</div><div class="cbx-sub">$##cost_pp_f## per person for ##people_f##</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-cloud" aria-hidden="true"></i></div><div class="cbx-lab">CO&#8322; emitted</div><div class="cbx-val">##co2_f## kg</div><div class="cbx-sub">Absorbed by ~##trees_f## trees in a year</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-road" aria-hidden="true"></i></div><div class="cbx-lab">Distance driven</div><div class="cbx-val">##km_f## km</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-user-group" aria-hidden="true"></i></div><div class="cbx-lab">CO&#8322; per person</div><div class="cbx-val">##co2_pp_f## kg</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-gauge-high" aria-hidden="true"></i></div><div class="cbx-lab">CO&#8322; per km</div><div class="cbx-val">##gkm_f## g</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-coins" aria-hidden="true"></i></div><div class="cbx-lab">Cost per 100 km</div><div class="cbx-val">$##per100_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-tag" aria-hidden="true"></i></div><div class="cbx-lab">Price you entered</div><div class="cbx-val">$##price_f## /##unit_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-tree" aria-hidden="true"></i></div><div class="cbx-lab">Trees for one year</div><div class="cbx-val">##trees_f##</div></div>
+</div>
+<div class="cbx-panel"><h4>The same trip with other fuel types</h4><div class="cbx-cmpgrid"><div><h5>Trip cost</h5>##cmp_cost##</div><div><h5>CO&#8322; emitted</h5>##cmp_co2##</div></div><p style="margin:.9rem 0 0">##advice##</p><p style="margin:.4rem 0 0;font-size:.82rem;color:var(--muted)">Your fuel uses your consumption and price. The others use a typical vehicle (petrol 7.5 L, diesel 6.0 L, hybrid 4.8 L, electric 17 kWh per 100 km) and a typical price per unit.</p></div>
+<p class="cbx-note">Emission factors: petrol and hybrid 2.31 kg CO2 per litre, diesel 2.68 kg per litre, electricity 0.23 kg per kWh (average grid mix). One tree absorbs roughly 21 kg of CO2 per year.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Calculate my trip]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[143]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[32]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[distance]]></var>
+                                    <name><![CDATA[Distance]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[320]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[144]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[32]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[passengers]]></var>
+                                    <name><![CDATA[Passengers]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[2]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[145]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[32]]></idobj>
+                                    <type><![CDATA[3]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[roundtrip]]></var>
+                                    <name><![CDATA[Round trip?]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[Y]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[146]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[32]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[fuel]]></var>
+                                    <name><![CDATA[Fuel type]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[petrol]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Petrol - 2.31 kg CO2 per litre]]></name>
+                            <value><![CDATA[petrol]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Diesel - 2.68 kg CO2 per litre]]></name>
+                            <value><![CDATA[diesel]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Hybrid (petrol) - 2.31 kg CO2 per litre]]></name>
+                            <value><![CDATA[hybrid]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Electric - 0.23 kg CO2 per kWh]]></name>
+                            <value><![CDATA[electric]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[147]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[32]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[4]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[consumption]]></var>
+                                    <name><![CDATA[Consumption per 100 km]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[6.8]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[148]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[32]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[5]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[fuelprice]]></var>
+                                    <name><![CDATA[Fuel price]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[1.72]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+        </calculator>

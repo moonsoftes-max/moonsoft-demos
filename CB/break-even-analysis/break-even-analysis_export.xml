@@ -1,0 +1,366 @@
+<calculator> <utility>
+            <id><![CDATA[34]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Break-even Analysis]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Break-even Analysis ----
+// $fixed = fixed costs per month, $price = selling price per unit, $varcost = variable cost per unit,
+// $units = expected units sold per month.
+$F = max(0, (float) $fixed);
+$P = max(0, (float) $price);
+$V = max(0, (float) $varcost);
+$U = max(0, (float) $units);
+$fm = function ($v, $d = 0) { return number_format($v, $d, '.', ','); };
+
+$cm    = $P - $V;                                   // contribution margin per unit
+$cm_pc = ($P > 0) ? $cm / $P * 100 : 0;             // contribution margin ratio
+$ok    = ($cm > 0);                                 // a break-even point exists only if each sale contributes
+$be_u  = $ok ? $F / $cm : 0;                        // break-even units (exact)
+$be_i  = (int) ceil($be_u - 1e-9);                  // whole units needed to cover the fixed costs
+$be_r  = $ok ? $F / ($cm_pc / 100) : 0;             // break-even revenue
+
+$rev    = $U * $P;
+$cost   = $F + $U * $V;
+$profit = $rev - $cost;                             // expected monthly profit = units x margin - fixed costs
+
+// margin of safety: how far sales can fall before profit hits zero
+$mos_u  = $U - $be_u;
+$mos_pc = ($ok && $U > 0) ? $mos_u / $U * 100 : 0;
+
+// ---- chart: revenue versus cost at 0, 0.25 ... 2 times the break-even volume ----
+$base = ($ok && $be_u > 0) ? $be_u : max(100, $U);
+$maxv = max(2 * $base * $P, $F + 2 * $base * $V, 1);
+$bars = ''; $xl = '';
+for ($k = 0; $k <= 8; $k++) {
+    $u  = $base * $k / 4;
+    $hr = round($u * $P / $maxv * 100, 2);
+    $hc = round(($F + $u * $V) / $maxv * 100, 2);
+    $bars .= '<div class="be-g' . ($ok && $k === 4 ? ' hl' : '') . '" title="' . $fm($u) . ' units">'
+           . '<div class="be-r" style="height:' . $hr . '%"></div>'
+           . '<div class="be-c" style="height:' . $hc . '%"><div class="v" style="flex:' . round($u * $V, 2) . ' 0 0"></div><div class="f" style="flex:' . round($F, 2) . ' 0 0"></div></div></div>';
+    $xl   .= '<span>' . ($k % 2 !== 0 ? '' : (($ok && $k === 4) ? $fm($be_i) : $fm($u))) . '</span>';
+}
+$tag = $ok ? '<div class="be-tag">Break-even</div>' : '';
+$chart = '<div class="be-chart" role="img" aria-label="Revenue versus total cost at different sales volumes">' . $tag . $bars . '</div><div class="be-xl" aria-hidden="true">' . $xl . '</div>';
+
+// ---- safety gauge: loss zone / profit zone with a pin at the expected sales ----
+if ($ok) {
+    $scale = max($be_u, $U) * 1.3;
+    $loss_w = round($be_u / $scale * 100, 1);
+    $pin   = round(min(100, $U / $scale * 100), 1);
+    $lab   = max(14, min(86, $pin));
+    $safety = '<div class="be-top"><span style="left:' . $lab . '%">Expected ' . $fm($U) . '</span></div>'
+        . '<div class="cbx-gaugewrap"><div class="cbx-gauge"><i style="width:' . $loss_w . '%;background:#f87171"></i><i style="width:' . (100 - $loss_w) . '%;background:#34d399"></i></div>'
+        . '<div class="cbx-pin" style="left:' . $pin . '%"></div></div>'
+        . '<div class="cbx-ticks"><span style="left:0">0</span><span style="left:' . $loss_w . '%">Break-even ' . $fm($be_i) . '</span></div>';
+    if ($U >= $be_u) { $advice = 'Sales can fall by <strong>' . $fm($mos_u) . ' units</strong> (' . $fm($mos_pc, 1) . '% or $' . $fm($mos_u * $P) . ' of revenue) before you stop making a profit.'; }
+    else             { $advice = 'Expected sales are <strong>' . $fm($be_u - $U) . ' units</strong> below break-even, so each month loses money. Raise the price, cut costs or sell more.'; }
+} else {
+    $safety = '';
+    $advice = 'The price is not above the variable cost, so every sale loses money and there is no break-even point. Raise the price or lower the variable cost.';
+}
+
+// display strings
+$be_units   = $ok ? $fm($be_i) : 'n/a';
+$be_rev     = $ok ? '$' . $fm($be_r) : 'n/a';
+$rev_f      = $fm($rev);
+$cost_f     = $fm($cost);
+$units_f    = $fm($U);
+$cm_f       = ($cm < 0 ? '-$' : '$') . $fm(abs($cm), 2);
+$cm_pc_f    = $fm($cm_pc, 1) . '%';
+$mos_f      = $ok ? $fm($mos_pc, 1) . '%' : 'n/a';
+$profit_lab = ($profit >= 0) ? 'Expected monthly profit' : 'Expected monthly loss';
+$profit_f   = ($profit < 0 ? '-$' : '$') . $fm(abs($profit));
+$profit_sub = $units_f . ' units earn $' . $rev_f . ' of revenue against $' . $cost_f . ' of costs';
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-be{--a:#334155;--a2:#64748b;--soft:#f8fafc;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-be *{box-sizing:border-box}
+.cbx-be .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-be .cbx-c12{grid-column:span 12}.cbx-be .cbx-c6{grid-column:span 6}.cbx-be .cbx-c4{grid-column:span 4}.cbx-be .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-be .cbx-c6,.cbx-be .cbx-c4,.cbx-be .cbx-c3{grid-column:span 12}}
+.cbx-be .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-be .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-be .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-be .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-be .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-be .cbx-card .form-control,.cbx-be .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-be .cbx-card .form-control:focus,.cbx-be .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #33415533;outline:0}
+.cbx-be .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-be .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-be .cbx-card textarea.form-control{min-height:90px}
+.cbx-be .cbx-card .radio,.cbx-be .cbx-card .checkbox{margin:0}
+.cbx-be .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-be .cbx-card div[style*="float"]{float:none!important}
+.cbx-be .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-be .cbx-card label.radio,.cbx-be .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#334155,#64748b);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #33415544;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #33415555}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #33415566;outline-offset:2px}
+.cbx-be-res{--a:#334155;--a2:#64748b;--soft:#f8fafc;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-be-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-be-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #33415533}
+.cbx-be-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-be-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-be-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-be-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-be-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-be-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-be-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-be-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-be-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-be-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-be-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-be-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-be-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-be-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-be-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-be-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-be-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-be-res .cbx-row:last-child{border-bottom:0}
+.cbx-be-res .cbx-row b{font-weight:700}
+.cbx-be-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-be-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-be-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-be-res .cbx-table .r{text-align:right}
+.cbx-be-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-be-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-be-res .cbx-gauge i{display:block;height:100%}
+.cbx-be-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-be-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-be-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-be-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-be-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-be-res .cbx-col .sa{background:var(--a)}
+.cbx-be-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-be-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-be-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-be-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-be-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-be-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-be-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-be"><div class="cbx-grid">
+<div class="cbx-sec">Your costs</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Fixed costs ($ / month)</label>##fixed##<div class="cbx-h">Rent, salaries, software: costs that do not change with volume.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Variable cost per unit ($)</label>##varcost##<div class="cbx-h">Materials, packaging, fees: what one more unit costs you.</div></div></div>
+<div class="cbx-sec">Your sales</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Price per unit ($)</label>##price##<div class="cbx-h">What a customer pays for one unit.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Expected sales (units / month)</label>##units##<div class="cbx-h">How many units you expect to sell in a typical month.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<div class="cbx-be-res">
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-scale-balanced" aria-hidden="true"></i></div><div class="cbx-lab">Break-even point</div><div class="cbx-val">##be_units## units</div><div class="cbx-sub">Per month, rounded up to a whole unit. That is ##be_rev## of revenue.</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-sack-dollar" aria-hidden="true"></i></div><div class="cbx-lab">##profit_lab##</div><div class="cbx-val">##profit_f##</div><div class="cbx-sub">##profit_sub##</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-receipt" aria-hidden="true"></i></div><div class="cbx-lab">Break-even revenue</div><div class="cbx-val">##be_rev##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-tag" aria-hidden="true"></i></div><div class="cbx-lab">Contribution per unit</div><div class="cbx-val">##cm_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-percent" aria-hidden="true"></i></div><div class="cbx-lab">Contribution margin</div><div class="cbx-val">##cm_pc_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-shield-halved" aria-hidden="true"></i></div><div class="cbx-lab">Margin of safety</div><div class="cbx-val">##mos_f##</div></div>
+</div>
+<style>
+.cbx-be-res .be-chart{position:relative;display:flex;align-items:flex-end;gap:6px;height:210px;border-bottom:2px solid var(--line)}
+.cbx-be-res .be-g{flex:1;display:flex;align-items:flex-end;gap:2px;height:100%;min-width:0}
+.cbx-be-res .be-g.hl{background:rgba(51,65,85,.11);border-radius:6px 6px 0 0}
+.cbx-be-res .be-r{flex:1;background:#0f766e;border-radius:3px 3px 0 0;min-width:0}
+.cbx-be-res .be-c{flex:1;display:flex;flex-direction:column-reverse;min-width:0;border-radius:3px 3px 0 0;overflow:hidden}
+.cbx-be-res .be-c .f{background:#b45309}
+.cbx-be-res .be-c .v{background:#fbbf24}
+.cbx-be-res .be-tag{position:absolute;left:50%;top:0;transform:translateX(-50%);background:#334155;color:#fff;font-size:.72rem;font-weight:700;padding:.15rem .6rem;border-radius:999px;z-index:2}
+.cbx-be-res .be-xl{display:flex;gap:6px;font-size:.72rem;color:var(--muted);margin-top:.3rem}
+.cbx-be-res .be-xl span{flex:1;text-align:center;min-width:0;white-space:nowrap}
+.cbx-be-res .be-top{position:relative;height:1.3rem;font-size:.78rem;font-weight:700;color:#0f172a}
+.cbx-be-res .be-top span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-be-res .cbx-capt{text-align:center;font-size:.75rem;color:var(--muted);margin-top:.15rem}
+</style><div class="cbx-panel"><h4>Revenue versus cost at different sales volumes</h4>##chart##<div class="cbx-capt">Units sold per month</div><div class="cbx-legend"><span><i style="background:#0f766e"></i>Revenue</span><span><i style="background:#b45309"></i>Fixed costs</span><span><i style="background:#fbbf24"></i>Variable costs</span></div></div><div class="cbx-panel"><h4>How safe are your expected sales?</h4>##safety##<p style="margin:.6rem 0 0">##advice##</p></div>
+<p class="cbx-note">Break-even units = fixed costs divided by the contribution margin per unit (price minus variable cost). Assumes a constant price and constant unit costs.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Find my break-even]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[155]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[34]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[fixed]]></var>
+                                    <name><![CDATA[Fixed costs per month]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[12000]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[156]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[34]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[varcost]]></var>
+                                    <name><![CDATA[Variable cost per unit]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[24]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[157]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[34]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[price]]></var>
+                                    <name><![CDATA[Price per unit]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[60]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[158]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[34]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[units]]></var>
+                                    <name><![CDATA[Expected sales (units per month)]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[480]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+        </calculator>

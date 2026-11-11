@@ -1,0 +1,414 @@
+<calculator> <utility>
+            <id><![CDATA[26]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Date Difference & Countdown]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Date Difference & Countdown ----
+// $date_start / $date_end are Date fields. The frontend datepicker sends plain TEXT in the calculator's
+// date format (d-m-Y, e.g. 21-09-2026) and Calc Builder does NOT validate it: users can type anything,
+// so we parse strictly ourselves. $incl_end is 'Y' when ticked, 'N' otherwise; $workweek is '5', '6' or '7'.
+
+$parse = function ($s) {
+    $s = str_replace(['/', '.'], '-', trim((string) $s));
+    foreach (['!d-m-Y', '!Y-m-d'] as $fmt) {
+        $dt  = DateTime::createFromFormat($fmt, $s);
+        $err = DateTime::getLastErrors();                       // false or array; rejects 31-02-2027 (rolled over)
+        if ($dt && (!$err || ($err['warning_count'] == 0 && $err['error_count'] == 0))
+            && (int) $dt->format('Y') >= 1900 && (int) $dt->format('Y') <= 2200) {
+            return $dt;
+        }
+    }
+    return null;
+};
+$plural = function ($n, $word) { return number_format($n) . ' ' . $word . ($n == 1 ? '' : 's'); };
+
+$A = $parse($date_start);
+$B = $parse($date_end);
+$ok = ($A !== null && $B !== null);
+
+$work_n     = ($workweek === '7') ? 7 : (($workweek === '6') ? 6 : 5);
+$week_label = [5 => 'Monday to Friday', 6 => 'Monday to Saturday', 7 => 'Every day of the week'][$work_n];
+$names      = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'];
+
+$warn = '';
+$res_style = '';
+$notice = '';
+
+if (!$ok) {
+    $warn = '<div class="dd-warn"><strong>Check the dates.</strong> Please enter both dates as day-month-year, for example 21-09-2026. '
+          . 'Impossible dates such as 31-02-2027 are rejected.</div>';
+    $res_style = 'display:none';
+    $total_days = $weeks_days = $months_days = $working = $non_working = $hours = '-';
+    $sub_total = $sub_work = $range_from = $range_to = $range_note = '';
+    $cd_y = $cd_m = $cd_d = 0;
+    $cd_yl = 'Years'; $cd_ml = 'Months'; $cd_dl = 'Days';
+    $wd_bars = '';
+} else {
+    $swapped = ($A > $B);
+    if ($swapped) { $tmp = $A; $A = $B; $B = $tmp; }
+    $incl = ($incl_end === 'Y');
+
+    // the range is [A, X): X is the end date itself, or the day after it when the end date is included
+    $X = clone $B;
+    if ($incl) { $X->modify('+1 day'); }
+
+    $iv    = $A->diff($X);                   // calendar-aware years / months / days
+    $total = (int) $iv->days;                // exact number of days
+    $weeks = intdiv($total, 7);
+    $wrem  = $total % 7;
+    $mon_total = $iv->y * 12 + $iv->m;
+
+    // how many of each weekday fall in the range: full weeks give one each, the remainder is walked day by day
+    $first_dow = (int) $A->format('N');      // 1 = Monday ... 7 = Sunday
+    $cnt = array_fill(1, 7, $weeks);
+    for ($i = 0; $i < $wrem; $i++) { $cnt[(($first_dow - 1 + $i) % 7) + 1]++; }
+    $work = 0;
+    for ($dw = 1; $dw <= $work_n; $dw++) { $work += $cnt[$dw]; }
+    $off = $total - $work;
+
+    if ($swapped) { $notice = '<div class="dd-warn dd-info">The end date is earlier than the start date, so the two dates were swapped.</div>'; }
+    $warn = $notice;
+
+    // weekday bars
+    $maxc = max($cnt);
+    $pct_work = $total > 0 ? round($work / $total * 100, 1) : 0;
+    $pct_off  = round(100 - $pct_work, 1);
+    $wd_bars  = '<div class="dd-split"><i class="w" style="width:' . $pct_work . '%"></i><i class="o" style="width:' . $pct_off . '%"></i></div>'
+              . '<div class="dd-leg"><span><i class="w"></i>Working days: <b>' . number_format($work) . '</b> (' . round($pct_work) . '%)</span>'
+              . '<span><i class="o"></i>Non-working days: <b>' . number_format($off) . '</b> (' . round($pct_off) . '%)</span></div>'
+              . '<div class="dd-chips">';
+    foreach ($names as $dw => $nm) {
+        $wd_bars .= '<div class="dd-chip ' . ($dw <= $work_n ? 'w' : 'o') . '"><span>' . substr($nm, 0, 3) . '</span><b>' . number_format($cnt[$dw]) . '</b></div>';
+    }
+    $wd_bars .= '</div>';
+
+    $range_from = $A->format('D, j M Y');
+    $range_to   = $B->format('D, j M Y');
+    $range_note = $incl ? 'End date counted' : 'End date not counted';
+
+    $cd_y = $iv->y; $cd_m = $iv->m; $cd_d = $iv->d;
+    $cd_yl = $cd_y == 1 ? 'Year' : 'Years'; $cd_ml = $cd_m == 1 ? 'Month' : 'Months'; $cd_dl = $cd_d == 1 ? 'Day' : 'Days';
+    $sub_total = $plural($weeks, 'week') . ' and ' . $plural($wrem, 'day');
+    $sub_work  = $week_label . '. Public holidays are not excluded.';
+
+    // display strings (overwrite in place, as in the other examples)
+    $total_days   = number_format($total);
+    $weeks_days   = $plural($weeks, 'week') . ', ' . $plural($wrem, 'day');
+    $months_days  = $plural($mon_total, 'month') . ', ' . $plural($iv->d, 'day');
+    $working      = number_format($work);
+    $non_working  = number_format($off);
+    $hours        = number_format($total * 24);
+}
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-dd{--a:#0f766e;--a2:#14b8a6;--soft:#ecfdf5;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-dd *{box-sizing:border-box}
+.cbx-dd .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-dd .cbx-c12{grid-column:span 12}.cbx-dd .cbx-c6{grid-column:span 6}.cbx-dd .cbx-c4{grid-column:span 4}.cbx-dd .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-dd .cbx-c6,.cbx-dd .cbx-c4,.cbx-dd .cbx-c3{grid-column:span 12}}
+.cbx-dd .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-dd .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-dd .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-dd .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-dd .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-dd .cbx-card .form-control,.cbx-dd .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-dd .cbx-card .form-control:focus,.cbx-dd .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #0f766e33;outline:0}
+.cbx-dd .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-dd .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-dd .cbx-card textarea.form-control{min-height:90px}
+.cbx-dd .cbx-card .radio,.cbx-dd .cbx-card .checkbox{margin:0}
+.cbx-dd .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-dd .cbx-card div[style*="float"]{float:none!important}
+.cbx-dd .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-dd .cbx-card label.radio,.cbx-dd .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#0f766e,#14b8a6);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #0f766e44;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #0f766e55}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #0f766e66;outline-offset:2px}
+.cbx-dd-res{--a:#0f766e;--a2:#14b8a6;--soft:#ecfdf5;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-dd-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-dd-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #0f766e33}
+.cbx-dd-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-dd-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-dd-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-dd-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-dd-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-dd-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-dd-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-dd-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-dd-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-dd-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-dd-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-dd-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-dd-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-dd-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-dd-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-dd-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-dd-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-dd-res .cbx-row:last-child{border-bottom:0}
+.cbx-dd-res .cbx-row b{font-weight:700}
+.cbx-dd-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-dd-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-dd-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-dd-res .cbx-table .r{text-align:right}
+.cbx-dd-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-dd-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-dd-res .cbx-gauge i{display:block;height:100%}
+.cbx-dd-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-dd-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-dd-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-dd-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-dd-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-dd-res .cbx-col .sa{background:var(--a)}
+.cbx-dd-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-dd-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-dd-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-dd-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-dd-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-dd-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-dd-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-dd"><div class="cbx-grid">
+<div class="cbx-sec">The two dates</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Start date</label>##date_start##<div class="cbx-h">Click to pick from the calendar, or type it as day-month-year, e.g. 21-09-2026.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">End date</label>##date_end##<div class="cbx-h">If it is before the start date the two dates are swapped for you.</div></div></div>
+<div class="cbx-sec">How to count</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Include the end date</label>##incl_end##<div class="cbx-h">Tick to count the end date as a full day too (a stay from the 1st to the 3rd is 3 days, not 2).</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Working week</label>##workweek##<div class="cbx-h">Decides which weekdays count as working days.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<style>
+.cbx-dd-res .dd-warn{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:12px;padding:.8rem 1rem;margin-bottom:1rem;font-size:.92rem}
+.cbx-dd-res .dd-warn.dd-info{background:#eff6ff;border-color:#bfdbfe;color:#1e40af}
+.cbx-dd-res .dd-range{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.cbx-dd-res .dd-pt{flex:0 0 auto}
+.cbx-dd-res .dd-pt small{display:block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-dd-res .dd-pt b{font-size:1.15rem;font-weight:800}
+.cbx-dd-res .dd-line{flex:1 1 60px;min-width:40px;height:3px;border-radius:3px;background:linear-gradient(90deg,var(--a),var(--a2));position:relative}
+.cbx-dd-res .dd-line:before,.cbx-dd-res .dd-line:after{content:"";position:absolute;top:-4px;width:11px;height:11px;border-radius:50%;background:#fff;border:3px solid var(--a)}
+.cbx-dd-res .dd-line:before{left:-2px}.cbx-dd-res .dd-line:after{right:-2px;border-color:var(--a2)}
+.cbx-dd-res .dd-tag{font-size:.78rem;color:var(--muted);margin-top:.7rem}
+.cbx-dd-res .dd-clock{display:flex;justify-content:center;gap:.7rem;flex-wrap:wrap}
+.cbx-dd-res .dd-unit{background:#0f172a;color:#fff;border-radius:14px;min-width:96px;padding:.9rem 1.1rem;text-align:center;flex:1 1 96px;max-width:190px}
+.cbx-dd-res .dd-unit b{display:block;font-size:2.3rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.cbx-dd-res .dd-unit span{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;opacity:.75}
+.cbx-dd-res .cbx-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cbx-dd-res .dd-split{display:flex;height:16px;border-radius:999px;overflow:hidden;background:#e2e8f0}
+.cbx-dd-res .dd-split i{display:block;height:100%}
+.cbx-dd-res i.w{background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-dd-res i.o{background:#94a3b8}
+.cbx-dd-res .dd-leg{display:flex;flex-wrap:wrap;gap:.4rem 1.6rem;margin:.7rem 0 1rem;font-size:.9rem}
+.cbx-dd-res .dd-leg i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem}
+.cbx-dd-res .dd-chips{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:.5rem}
+.cbx-dd-res .dd-chip{background:#fff;border:1px solid var(--line);border-top:4px solid #94a3b8;border-radius:10px;text-align:center;padding:.5rem .1rem}
+.cbx-dd-res .dd-chip.w{border-top-color:var(--a)}
+.cbx-dd-res .dd-chip span{display:block;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-dd-res .dd-chip b{font-size:1.15rem;font-weight:800}
+@media(max-width:560px){.cbx-dd-res .cbx-metrics{grid-template-columns:minmax(0,1fr)}.cbx-dd-res .dd-range{flex-direction:column;align-items:flex-start;gap:.7rem}.cbx-dd-res .dd-line{display:none}}
+@media(max-width:480px){.cbx-dd-res .dd-unit b{font-size:1.9rem}.cbx-dd-res .dd-unit{padding:.75rem .5rem;min-width:0}.cbx-dd-res .dd-chip b{font-size:.95rem}.cbx-dd-res .dd-chips{gap:.3rem}}
+</style><div class="cbx-dd-res">##warn##<div style="##res_style##">
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-calendar-days" aria-hidden="true"></i></div><div class="cbx-lab">Total days</div><div class="cbx-val">##total_days##</div><div class="cbx-sub">##sub_total##</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-briefcase" aria-hidden="true"></i></div><div class="cbx-lab">Working days</div><div class="cbx-val">##working##</div><div class="cbx-sub">##sub_work##</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-calendar-week" aria-hidden="true"></i></div><div class="cbx-lab">Weeks + days</div><div class="cbx-val">##weeks_days##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-calendar" aria-hidden="true"></i></div><div class="cbx-lab">Months + days</div><div class="cbx-val">##months_days##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-mug-hot" aria-hidden="true"></i></div><div class="cbx-lab">Non-working days</div><div class="cbx-val">##non_working##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-clock" aria-hidden="true"></i></div><div class="cbx-lab">Hours</div><div class="cbx-val">##hours##</div></div>
+</div>
+<div class="cbx-panel"><h4>The period</h4><div class="dd-range"><div class="dd-pt"><small>From</small><b>##range_from##</b></div><div class="dd-line"></div><div class="dd-pt"><small>To</small><b>##range_to##</b></div></div><div class="dd-tag">##range_note##</div></div><div class="cbx-panel"><h4>Countdown clock: calendar time between the dates</h4><div class="dd-clock"><div class="dd-unit"><b>##cd_y##</b><span>##cd_yl##</span></div><div class="dd-unit"><b>##cd_m##</b><span>##cd_ml##</span></div><div class="dd-unit"><b>##cd_d##</b><span>##cd_dl##</span></div></div></div><div class="cbx-panel"><h4>Working and non-working days, and how many of each weekday</h4>##wd_bars##</div>
+<p class="cbx-note">Months and days follow the calendar (a month is a real month, not 30 days). Public holidays are not taken into account.</p>
+</div></div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Calculate the difference]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[106]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[26]]></idobj>
+                                    <type><![CDATA[1]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[date_start]]></var>
+                                    <name><![CDATA[Start date]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[21-09-2026]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[107]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[26]]></idobj>
+                                    <type><![CDATA[1]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[date_end]]></var>
+                                    <name><![CDATA[End date]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[31-03-2028]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[108]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[26]]></idobj>
+                                    <type><![CDATA[3]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[incl_end]]></var>
+                                    <name><![CDATA[Include the end date]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[109]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[26]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[workweek]]></var>
+                                    <name><![CDATA[Working week]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[5]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Monday to Friday (5 days)]]></name>
+                            <value><![CDATA[5]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Monday to Saturday (6 days)]]></name>
+                            <value><![CDATA[6]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Every day (7 days)]]></name>
+                            <value><![CDATA[7]]></value> </multivalue>
+                                    </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+        </calculator>

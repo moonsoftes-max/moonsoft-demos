@@ -1,0 +1,436 @@
+<calculator> <utility>
+            <id><![CDATA[20]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Daily Calorie & Macro Planner]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Daily Calorie & Macro Planner ----
+// $sex = radio value (male|female); $age, $height (cm), $weight (kg) = Number fields;
+// $activity = activity multiplier (list value); $goal = lose|maintain|gain (list value).
+$a = max(15, min(100, (float) $age));
+$h = max(100, min(250, (float) $height));
+$w = max(30, min(300, (float) $weight));
+$mult = (float) $activity;
+
+// Mifflin-St Jeor basal metabolic rate
+$bmr_raw = 10 * $w + 6.25 * $h - 5 * $a + ($sex === 'female' ? -161 : 5);
+$tdee_raw = $bmr_raw * $mult;
+
+// goal: calorie adjustment, protein per kg of body weight, fat share of calories
+if ($goal === 'lose')      { $adj = -500; $prot_kg = 2.0; $fat_share = 0.25; $goal_text = 'Calories for steady weight loss (about 500 below maintenance)'; }
+elseif ($goal === 'gain')  { $adj = 300;  $prot_kg = 1.8; $fat_share = 0.25; $goal_text = 'Calories for lean weight gain (about 300 above maintenance)'; }
+else                       { $adj = 0;    $prot_kg = 1.6; $fat_share = 0.30; $goal_text = 'Calories to maintain your current weight'; }
+
+$tdee_i   = (int) round($tdee_raw);
+$target_i = (int) round($tdee_raw + $adj);
+
+// never recommend less than a safe minimum
+$floor = ($sex === 'female') ? 1200 : 1500;
+$warn = '';
+if ($target_i < $floor) {
+    $target_i = $floor;
+    $warn = '<p class="cbx-note">The target was raised to ' . number_format($floor) . ' kcal, a commonly used safe minimum. Very low intakes should be supervised by a professional.</p>';
+}
+
+// macros: protein by body weight, fat by share of calories, carbohydrate = the rest
+$prot_g = (int) round($w * $prot_kg);
+$fat_g  = (int) round($target_i * $fat_share / 9);
+$prot_k = $prot_g * 4;
+$fat_k  = $fat_g * 9;
+$carb_k = max(0, $target_i - $prot_k - $fat_k);
+$carb_g = (int) round($carb_k / 4);
+$sum_k  = max(1, $prot_k + $fat_k + $carb_k);
+$p_pct  = (int) round($prot_k / $sum_k * 100);
+$f_pct  = (int) round($fat_k / $sum_k * 100);
+$c_pct  = 100 - $p_pct - $f_pct;
+
+// expected weekly change (about 7,700 kcal per kg of body weight)
+$wk = ($target_i - $tdee_raw) * 7 / 7700;
+if (abs($wk) < 0.005) { $weekly = 'Stable weight'; }
+else                  { $weekly = ($wk > 0 ? '+' : '-') . number_format(abs($wk), 2) . ' kg/wk'; }
+
+// display strings
+$act_names = ['1.2' => 'Sedentary', '1.375' => 'Lightly active', '1.55' => 'Moderately active', '1.725' => 'Very active', '1.9' => 'Extra active'];
+$act_label = isset($act_names[(string) $activity]) ? $act_names[(string) $activity] : 'Custom';
+$bmr       = number_format($bmr_raw, 0, '.', ',');
+$tdee      = number_format($tdee_i, 0, '.', ',');
+$target    = number_format($target_i, 0, '.', ',');
+$mult      = rtrim(rtrim(number_format($mult, 3, '.', ''), '0'), '.');
+$prot_kg_f = number_format($prot_kg, 1, '.', '');
+$prot_k    = number_format($prot_k, 0, '.', ',');
+$carb_k    = number_format($carb_k, 0, '.', ',');
+$fat_k     = number_format($fat_k, 0, '.', ',');
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-cal{--a:#c2410c;--a2:#fb923c;--soft:#fff7ed;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-cal *{box-sizing:border-box}
+.cbx-cal .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-cal .cbx-c12{grid-column:span 12}.cbx-cal .cbx-c6{grid-column:span 6}.cbx-cal .cbx-c4{grid-column:span 4}.cbx-cal .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-cal .cbx-c6,.cbx-cal .cbx-c4,.cbx-cal .cbx-c3{grid-column:span 12}}
+.cbx-cal .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-cal .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-cal .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-cal .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-cal .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-cal .cbx-card .form-control,.cbx-cal .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-cal .cbx-card .form-control:focus,.cbx-cal .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #c2410c33;outline:0}
+.cbx-cal .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-cal .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-cal .cbx-card textarea.form-control{min-height:90px}
+.cbx-cal .cbx-card .radio,.cbx-cal .cbx-card .checkbox{margin:0}
+.cbx-cal .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-cal .cbx-card div[style*="float"]{float:none!important}
+.cbx-cal .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-cal .cbx-card label.radio,.cbx-cal .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#c2410c,#fb923c);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #c2410c44;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #c2410c55}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #c2410c66;outline-offset:2px}
+.cbx-cal-res{--a:#c2410c;--a2:#fb923c;--soft:#fff7ed;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-cal-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-cal-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #c2410c33}
+.cbx-cal-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-cal-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-cal-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-cal-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-cal-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-cal-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-cal-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-cal-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-cal-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-cal-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-cal-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-cal-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-cal-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-cal-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-cal-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-cal-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-cal-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-cal-res .cbx-row:last-child{border-bottom:0}
+.cbx-cal-res .cbx-row b{font-weight:700}
+.cbx-cal-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-cal-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-cal-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-cal-res .cbx-table .r{text-align:right}
+.cbx-cal-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-cal-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-cal-res .cbx-gauge i{display:block;height:100%}
+.cbx-cal-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-cal-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-cal-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-cal-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-cal-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-cal-res .cbx-col .sa{background:var(--a)}
+.cbx-cal-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-cal-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-cal-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-cal-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-cal-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-cal-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-cal-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-cal"><div class="cbx-grid">
+<div class="cbx-sec">About you</div>
+<div class="cbx-c3"><div class="cbx-card"><label class="cbx-l">Sex</label>##sex##<div class="cbx-h">Used by the BMR formula.</div></div></div>
+<div class="cbx-c3"><div class="cbx-card"><label class="cbx-l">Age (years)</label>##age##<div class="cbx-h">Between 15 and 100.</div></div></div>
+<div class="cbx-c3"><div class="cbx-card"><label class="cbx-l">Height (cm)</label>##height##<div class="cbx-h">Standing height.</div></div></div>
+<div class="cbx-c3"><div class="cbx-card"><label class="cbx-l">Weight (kg)</label>##weight##<div class="cbx-h">Current body weight.</div></div></div>
+<div class="cbx-sec">Lifestyle and goal</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Activity level</label>##activity##<div class="cbx-h">Workouts per week, or how physical your job is.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Goal</label>##goal##<div class="cbx-h">Sets the calorie adjustment and protein target.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<div class="cbx-cal-res">
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-fire-flame-curved" aria-hidden="true"></i></div><div class="cbx-lab">Daily calorie target</div><div class="cbx-val">##target## kcal</div><div class="cbx-sub">##goal_text##</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-bolt" aria-hidden="true"></i></div><div class="cbx-lab">Maintenance (TDEE)</div><div class="cbx-val">##tdee## kcal</div><div class="cbx-sub">BMR ##bmr## kcal &times; ##mult## (##act_label##)</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-heart-pulse" aria-hidden="true"></i></div><div class="cbx-lab">Basal metabolic rate</div><div class="cbx-val">##bmr## kcal</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-drumstick-bite" aria-hidden="true"></i></div><div class="cbx-lab">Protein target</div><div class="cbx-val">##prot_g## g</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-wheat-awn" aria-hidden="true"></i></div><div class="cbx-lab">Carbohydrate</div><div class="cbx-val">##carb_g## g</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-scale-balanced" aria-hidden="true"></i></div><div class="cbx-lab">Expected change</div><div class="cbx-val">##weekly##</div></div>
+</div>
+<style>
+.cbx-cal-res .macro-bar{display:flex;height:34px;border-radius:999px;overflow:hidden;margin:.2rem 0 1rem}
+.cbx-cal-res .macro-bar i{display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:.85rem;color:#fff;min-width:2.6rem}
+.cbx-cal-res .macro-legend{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem}
+.cbx-cal-res .macro-item{background:#fff;border:1px solid var(--line);border-radius:12px;padding:.8rem .9rem}
+.cbx-cal-res .macro-item .mn{display:flex;align-items:center;gap:.45rem;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-cal-res .macro-item .mn s{display:inline-block;width:.75rem;height:.75rem;border-radius:3px;text-decoration:none}
+.cbx-cal-res .macro-item .mg{font-size:1.6rem;font-weight:800;line-height:1.2;margin-top:.25rem}
+.cbx-cal-res .macro-item .mk{font-size:.82rem;color:var(--muted)}
+@media(max-width:560px){.cbx-cal-res .macro-legend{grid-template-columns:1fr}
+.cbx-cal-res .macro-item{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:.6rem}
+.cbx-cal-res .macro-item .mn{grid-column:1;grid-row:1}.cbx-cal-res .macro-item .mk{grid-column:1;grid-row:2}
+.cbx-cal-res .macro-item .mg{grid-column:2;grid-row:1/span 2;margin:0}}
+</style><div class="cbx-panel"><h4>Your daily macro split</h4><div class="macro-bar" role="img" aria-label="Macro split: ##p_pct##% protein, ##c_pct##% carbohydrate, ##f_pct##% fat"><i style="width:##p_pct##%;background:#9a3412">##p_pct##%</i><i style="width:##c_pct##%;background:#ea580c">##c_pct##%</i><i style="width:##f_pct##%;background:#d99a06">##f_pct##%</i></div><div class="macro-legend"><div class="macro-item"><div class="mn"><s style="background:#9a3412"></s>Protein</div><div class="mg">##prot_g## g</div><div class="mk">##prot_k## kcal &middot; ##prot_kg_f## g per kg</div></div><div class="macro-item"><div class="mn"><s style="background:#ea580c"></s>Carbohydrate</div><div class="mg">##carb_g## g</div><div class="mk">##carb_k## kcal &middot; the remainder</div></div><div class="macro-item"><div class="mn"><s style="background:#d99a06"></s>Fat</div><div class="mg">##fat_g## g</div><div class="mk">##fat_k## kcal &middot; ##f_pct##% of calories</div></div></div></div>##warn##
+<p class="cbx-note">Estimates from the Mifflin-St Jeor equation. Real needs vary with body composition, genetics and daily habits, so treat the numbers as a starting point and adjust after a few weeks.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Plan my calories]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[65]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[20]]></idobj>
+                                    <type><![CDATA[12]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[sex]]></var>
+                                    <name><![CDATA[Sex]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[male]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Male]]></name>
+                            <value><![CDATA[male]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Female]]></name>
+                            <value><![CDATA[female]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[66]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[20]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[age]]></var>
+                                    <name><![CDATA[Age]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[30]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[67]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[20]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[height]]></var>
+                                    <name><![CDATA[Height (cm)]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[178]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[68]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[20]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[weight]]></var>
+                                    <name><![CDATA[Weight (kg)]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[78]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[69]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[20]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[4]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[activity]]></var>
+                                    <name><![CDATA[Activity level]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[1.55]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Sedentary (desk job)]]></name>
+                            <value><![CDATA[1.2]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Light (1-3 workouts a week)]]></name>
+                            <value><![CDATA[1.375]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Moderate (3-5 workouts a week)]]></name>
+                            <value><![CDATA[1.55]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Very active (6-7 days a week)]]></name>
+                            <value><![CDATA[1.725]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Extra active (physical job)]]></name>
+                            <value><![CDATA[1.9]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[70]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[20]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[5]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[goal]]></var>
+                                    <name><![CDATA[Goal]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[lose]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Lose weight (-500 kcal a day)]]></name>
+                            <value><![CDATA[lose]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Maintain my weight]]></name>
+                            <value><![CDATA[maintain]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Gain weight (+300 kcal a day)]]></name>
+                            <value><![CDATA[gain]]></value> </multivalue>
+                                    </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+        </calculator>

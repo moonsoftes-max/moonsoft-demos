@@ -1,0 +1,398 @@
+<calculator> <utility>
+            <id><![CDATA[14]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Savings Growth with Compound Interest]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Savings Growth (spreadsheet powered) ----
+// The workbook does all the finance maths. The //[EXCEL] marker below is replaced by Calc Builder
+// with the code that writes $initial, $monthly, $rate, $years into B3:B6, recalculates the workbook
+// and reads B8:B10 back into $final_balance, $total_contrib, $total_interest.
+// Afterwards $objPHPExcel is the loaded workbook, so we can also read the yearly table (A14:D53).
+
+//[EXCEL]
+
+$sheet = $objPHPExcel->getSheet(0);
+$n = max(1, min(40, (int) $years));
+
+$data = [];
+$max  = 0;
+for ($r = 14; $r <= 13 + $n; $r++) {
+    $c = (float) $sheet->getCell("B$r")->getCalculatedValue();
+    $b = (float) $sheet->getCell("D$r")->getCalculatedValue();
+    $data[] = [$r - 13, $c, $b - $c];
+    $max = max($max, $b);
+}
+
+$chart  = '<div class="cbx-chart" role="img" aria-label="Balance by year, contributions and interest">';
+$labels = '<div class="cbx-xl" aria-hidden="true">';
+foreach ($data as [$yr, $c, $i]) {
+    $hc = $max > 0 ? round($c / $max * 100, 1) : 0;
+    $hi = $max > 0 ? round($i / $max * 100, 1) : 0;
+    $chart  .= '<div class="cbx-col" title="Year ' . $yr . '"><div class="sb" style="height:' . $hi . '%"></div><div class="sa" style="height:' . $hc . '%"></div></div>';
+    $show = ($yr == 1 || $yr == $n || ($n > 12 && $yr % 5 == 0) || ($n <= 12));
+    $labels .= '<span>' . ($show ? $yr : '') . '</span>';
+}
+$chart .= '</div>' . $labels . '</div>';
+
+// mapped output cells come back as *formatted* text ("171,362.02"), so strip the thousands separator
+$fin  = (float) str_replace(',', '', (string) $final_balance);
+$con  = (float) str_replace(',', '', (string) $total_contrib);
+$int  = (float) str_replace(',', '', (string) $total_interest);
+$share = ($fin > 0) ? round($int / $fin * 100) : 0;
+
+// display strings (overwrite in place, as in the other examples)
+$final_balance  = number_format($fin, 0, '.', ',');
+$total_contrib  = number_format($con, 0, '.', ',');
+$total_interest = number_format($int, 0, '.', ',');
+$initial_f      = number_format((float) $initial, 0, '.', ',');
+$monthly_f      = number_format((float) $monthly, 0, '.', ',');
+$rate_f         = rtrim(rtrim(number_format((float) $rate, 2, '.', ''), '0'), '.');
+$years          = $n;
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-sav{--a:#15803d;--a2:#4ade80;--soft:#f0fdf4;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-sav *{box-sizing:border-box}
+.cbx-sav .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-sav .cbx-c12{grid-column:span 12}.cbx-sav .cbx-c6{grid-column:span 6}.cbx-sav .cbx-c4{grid-column:span 4}.cbx-sav .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-sav .cbx-c6,.cbx-sav .cbx-c4,.cbx-sav .cbx-c3{grid-column:span 12}}
+.cbx-sav .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-sav .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-sav .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-sav .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-sav .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-sav .cbx-card .form-control,.cbx-sav .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-sav .cbx-card .form-control:focus,.cbx-sav .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #15803d33;outline:0}
+.cbx-sav .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-sav .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-sav .cbx-card textarea.form-control{min-height:90px}
+.cbx-sav .cbx-card .radio,.cbx-sav .cbx-card .checkbox{margin:0}
+.cbx-sav .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-sav .cbx-card div[style*="float"]{float:none!important}
+.cbx-sav .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-sav .cbx-card label.radio,.cbx-sav .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#15803d,#4ade80);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #15803d44;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #15803d55}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #15803d66;outline-offset:2px}
+.cbx-sav-res{--a:#15803d;--a2:#4ade80;--soft:#f0fdf4;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-sav-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-sav-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #15803d33}
+.cbx-sav-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-sav-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-sav-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-sav-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-sav-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-sav-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-sav-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-sav-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-sav-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-sav-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-sav-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-sav-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-sav-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-sav-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-sav-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-sav-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-sav-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-sav-res .cbx-row:last-child{border-bottom:0}
+.cbx-sav-res .cbx-row b{font-weight:700}
+.cbx-sav-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-sav-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-sav-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-sav-res .cbx-table .r{text-align:right}
+.cbx-sav-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-sav-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-sav-res .cbx-gauge i{display:block;height:100%}
+.cbx-sav-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-sav-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-sav-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-sav-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-sav-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-sav-res .cbx-col .sa{background:var(--a)}
+.cbx-sav-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-sav-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-sav-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-sav-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-sav-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-sav-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-sav-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-sav"><div class="cbx-grid">
+<div class="cbx-sec">Your savings plan</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Initial deposit ($)</label>##initial##<div class="cbx-h">What you put in on day one.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Monthly contribution ($)</label>##monthly##<div class="cbx-h">Added at the end of every month.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Expected annual return (%)</label>##rate##<div class="cbx-h">A long-term stock-market average is often quoted around 5&ndash;7%.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Time horizon (years)</label>##years##<div class="cbx-h">Between 1 and 40 years.</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<div class="cbx-sav-res">
+<p style="margin:0 0 .8rem"><span class="cbx-badge">Powered by an Excel workbook</span></p>
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-piggy-bank" aria-hidden="true"></i></div><div class="cbx-lab">Balance after ##years## years</div><div class="cbx-val">$##final_balance##</div><div class="cbx-sub">Starting from $##initial_f## + $##monthly_f## every month at ##rate_f##%</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-arrow-trend-up" aria-hidden="true"></i></div><div class="cbx-lab">Interest earned</div><div class="cbx-val">$##total_interest##</div><div class="cbx-sub">##share##% of your final balance is growth</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-coins" aria-hidden="true"></i></div><div class="cbx-lab">Total you contributed</div><div class="cbx-val">$##total_contrib##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-percent" aria-hidden="true"></i></div><div class="cbx-lab">Growth share</div><div class="cbx-val">##share##%</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-calendar-check" aria-hidden="true"></i></div><div class="cbx-lab">Time horizon</div><div class="cbx-val">##years## years</div></div>
+</div>
+<div class="cbx-panel"><h4>How your balance grows, year by year</h4>##chart##<div class="cbx-legend"><span><i style="background:var(--a)"></i>Your contributions</span><span><i style="background:var(--a2)"></i>Interest earned</span></div></div>
+<p class="cbx-note">Every figure comes from the downloadable Excel workbook. Returns are hypothetical and not guaranteed.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Calculate growth]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[45]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[14]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[initial]]></var>
+                                    <name><![CDATA[Initial deposit]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[10000]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[46]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[14]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[monthly]]></var>
+                                    <name><![CDATA[Monthly contribution]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[300]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[47]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[14]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[2]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[rate]]></var>
+                                    <name><![CDATA[Annual return]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[6]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[48]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[14]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[years]]></var>
+                                    <name><![CDATA[Years]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[20]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+                <excel>
+                        <id><![CDATA[3]]></id>
+                            <idobj><![CDATA[14]]></idobj>
+                            <excelfile><![CDATA[9790_savings_growth_model.xlsx]]></excelfile>
+                            <excelexec><![CDATA[2]]></excelexec>
+                            <cache><![CDATA[0]]></cache>
+                            <htmloutput><![CDATA[0]]></htmloutput>
+                            <pdfoutput><![CDATA[0]]></pdfoutput>
+                            <htmloutputpage><![CDATA[0]]></htmloutputpage>
+                            <pdfoutputpage><![CDATA[0]]></pdfoutputpage>
+                            <exceloutput><![CDATA[0]]></exceloutput>
+                            <locale><![CDATA[en_uk]]></locale>
+                    </excel>
+        <excelmapping>
+                            <mapping>
+                                        <id><![CDATA[15]]></id>
+                                            <idexcel><![CDATA[3]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B3]]></cell>
+                                            <phpvar><![CDATA[initial]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[16]]></id>
+                                            <idexcel><![CDATA[3]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B4]]></cell>
+                                            <phpvar><![CDATA[monthly]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[17]]></id>
+                                            <idexcel><![CDATA[3]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B5]]></cell>
+                                            <phpvar><![CDATA[rate]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[18]]></id>
+                                            <idexcel><![CDATA[3]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B6]]></cell>
+                                            <phpvar><![CDATA[years]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[19]]></id>
+                                            <idexcel><![CDATA[3]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B8]]></cell>
+                                            <phpvar><![CDATA[final_balance]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[20]]></id>
+                                            <idexcel><![CDATA[3]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B9]]></cell>
+                                            <phpvar><![CDATA[total_contrib]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[21]]></id>
+                                            <idexcel><![CDATA[3]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B10]]></cell>
+                                            <phpvar><![CDATA[total_interest]]></phpvar>
+                                    </mapping>
+                        </excelmapping>
+        </calculator>

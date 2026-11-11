@@ -1,0 +1,564 @@
+<calculator> <utility>
+            <id><![CDATA[25]]></id>
+                    <layout_preference><![CDATA[0]]></layout_preference>
+                    <reset_button><![CDATA[0]]></reset_button>
+                    <info_img><![CDATA[0]]></info_img>
+                    <pdf_orientation><![CDATA[0]]></pdf_orientation>
+                    <front_email><![CDATA[0]]></front_email>
+                    <front_excel><![CDATA[0]]></front_excel>
+                    <front_pdf><![CDATA[0]]></front_pdf>
+                    <calculateonfly><![CDATA[0]]></calculateonfly>
+                    <resultpopup><![CDATA[0]]></resultpopup>
+                    <up_prefix><![CDATA[0]]></up_prefix>
+                    <vm_product_type><![CDATA[0]]></vm_product_type>
+                    <up_maxuploadfiles><![CDATA[100]]></up_maxuploadfiles>
+                    <up_filesize><![CDATA[8]]></up_filesize>
+                    <popupwidth><![CDATA[250]]></popupwidth>
+                    <name><![CDATA[Salary Take-Home Calculator]]></name>
+                    <thousand_number_format><![CDATA[,]]></thousand_number_format>
+                    <decimal_number_format><![CDATA[.]]></decimal_number_format>
+                    <date_frontend_format><![CDATA[%d-%m-%Y]]></date_frontend_format>
+                    <sendemailform><![CDATA[]]></sendemailform>
+                    <up_extensions><![CDATA[]]></up_extensions>
+                    <up_mimetypes><![CDATA[]]></up_mimetypes>
+                    <up_folder><![CDATA[]]></up_folder>
+                    <info><![CDATA[]]></info>
+                    <code><![CDATA[// ---- Salary Take-Home Calculator (spreadsheet powered) ----
+// Fields: $salary (Number), $freq (List 12/13/14), $status (Radio 1/2), $pension (Number %), $loan (Yes/No).
+// The workbook holds the tax bands and does all the maths. The //[EXCEL] marker below is replaced by Calc
+// Builder with the code that writes the five inputs into B5:B9, recalculates the workbook and reads the
+// result cells (B12:B21) back into PHP variables.
+
+// clean the inputs and turn the Yes/No checkbox into the 1/0 the sheet expects
+$salary  = max(0, (float) $salary);
+$freq    = in_array((int) $freq, [12, 13, 14], true) ? (int) $freq : 12;
+$status  = ((int) $status === 2) ? 2 : 1;
+$pension = max(0, min(100, (float) $pension));
+$loan_flag = (isset($loan) && $loan === 'Y') ? 1 : 0;
+
+//[EXCEL]
+
+// $objPHPExcel is now the recalculated workbook: read the band-by-band rows (42-46) for the breakdown
+$sheet = $objPHPExcel->getSheet(0);
+$num = function ($v) { return (float) str_replace([',', '%', ' '], '', (string) $v); };
+$eur = function ($v, $d = 0) { return number_format((float) $v, $d, '.', ','); };
+
+$tax   = $num($tax_total);
+$soc   = $num($social_amt);
+$pen   = $num($pension_amt);
+$ln    = $num($loan_amt);
+$ded   = $num($total_ded);
+$net   = $num($net_annual);
+$netp  = $num($net_period);
+$taxable = (float) $sheet->getCell("B38")->getCalculatedValue();
+$allow   = (float) $sheet->getCell("B36")->getCalculatedValue();
+$eff_pct  = (float) $sheet->getCell("B19")->getCalculatedValue() * 100;
+$marg_pct = (float) $sheet->getCell("B21")->getCalculatedValue() * 100;
+$band_pct = (float) $sheet->getCell("B20")->getCalculatedValue() * 100;
+
+// tax table, one row per band
+$rows = '';
+for ($r = 42; $r <= 46; $r++) {
+    $from  = (float) $sheet->getCell("B$r")->getCalculatedValue();
+    $to    = $sheet->getCell("C$r")->getCalculatedValue();
+    $rate  = (float) $sheet->getCell("D$r")->getCalculatedValue() * 100;
+    $slice = (float) $sheet->getCell("E$r")->getCalculatedValue();
+    $bt    = (float) $sheet->getCell("F$r")->getCalculatedValue();
+    $range = is_numeric($to) ? $eur($from) . ' &ndash; ' . $eur($to) : $eur($from) . '+';
+    $cls   = ($slice > 0) ? '' : ' class="off"';
+    $rows .= '<tr' . $cls . '><td><b>Band ' . ($r - 41) . '</b><small>' . $range . '</small></td>'
+           . '<td class="r">' . rtrim(rtrim(number_format($rate, 1), '0'), '.') . '%</td>'
+           . '<td class="r">&euro;' . $eur($slice) . '</td>'
+           . '<td class="r">&euro;' . $eur($bt) . '</td></tr>';
+}
+$rows .= '<tr class="tot"><td>Income tax</td><td></td><td class="r">&euro;' . $eur($taxable) . '</td><td class="r">&euro;' . $eur($tax) . '</td></tr>';
+$band_table = '<table class="cbx-table sal-tbl"><thead><tr><th>Band (taxable income)</th><th class="r">Rate</th><th class="r">Taxed</th><th class="r">Tax</th></tr></thead><tbody>' . $rows . '</tbody></table>';
+
+// stacked bar: where does the gross salary go?
+$parts = [
+    ['Net pay',              $net, '#15803d'],
+    ['Income tax',           $tax, '#dc2626'],
+    ['Social contributions', $soc, '#f97316'],
+    ['Pension',              $pen, '#3b82f6'],
+    ['Student loan',         $ln,  '#8b5cf6'],
+];
+$bar = '<div class="sal-stack" role="img" aria-label="Share of gross salary: net pay, tax, social contributions, pension, student loan">';
+$leg = '<div class="sal-leg">';
+foreach ($parts as [$lab, $val, $col]) {
+    if ($val <= 0) { continue; }
+    $p = $salary > 0 ? $val / $salary * 100 : 0;
+    $bar .= '<div style="width:' . round($p, 2) . '%;background:' . $col . '" title="' . $lab . ' ' . round($p, 1) . '%">' . ($p >= 7 ? round($p) . '%' : '') . '</div>';
+    $leg .= '<div class="li"><i style="background:' . $col . '"></i><span>' . $lab . '</span><b>&euro;' . $eur($val) . '</b><em>' . round($p, 1) . '%</em></div>';
+}
+$bar .= '</div>';
+$leg .= '</div>';
+$gross_bar = $bar . $leg;
+
+// display strings (overwrite in place, like the other examples)
+$pay_note   = $freq . ' payments a year' . ($loan_flag ? ', student loan included' : '');
+$salary_f   = $eur($salary);
+$net_f      = $eur($net);
+$netp_f     = $eur($netp, 2);
+$ded_f      = $eur($ded);
+$taxable_f  = $eur($taxable);
+$allow_f    = $eur($allow);
+$eff_f      = number_format($eff_pct, 1, '.', '');
+$marg_f     = number_format($marg_pct, 1, '.', '');
+$band_f     = rtrim(rtrim(number_format($band_pct, 1), '0'), '.');
+$status_f   = ($status === 2) ? 'Married' : 'Single';
+$pension_f  = rtrim(rtrim(number_format($pension, 1, '.', ''), '0'), '.');
+$pen_f      = $eur($pen);
+$takehome_pct = number_format($salary > 0 ? $net / $salary * 100 : 0, 1, '.', '');
+]]></code>
+                    <preformhtml><![CDATA[]]></preformhtml>
+                    <precalcprint><![CDATA[]]></precalcprint>
+                    <poscalcprint><![CDATA[]]></poscalcprint>
+                    <layout><![CDATA[<style>
+.cbx-sal{--a:#15803d;--a2:#4ade80;--soft:#f0fdf4;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-sal *{box-sizing:border-box}
+.cbx-sal .cbx-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}
+.cbx-sal .cbx-c12{grid-column:span 12}.cbx-sal .cbx-c6{grid-column:span 6}.cbx-sal .cbx-c4{grid-column:span 4}.cbx-sal .cbx-c3{grid-column:span 3}
+@media(max-width:768px){.cbx-sal .cbx-c6,.cbx-sal .cbx-c4,.cbx-sal .cbx-c3{grid-column:span 12}}
+.cbx-sal .cbx-sec{grid-column:span 12;display:flex;align-items:center;gap:.6rem;margin:.6rem 0 -.2rem;font-weight:700;font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--a)}
+.cbx-sal .cbx-sec:after{content:"";flex:1;height:1px;background:var(--line)}
+.cbx-sal .cbx-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;box-shadow:0 1px 2px rgba(15,23,42,.05);height:100%}
+.cbx-sal .cbx-card label.cbx-l{display:block;font-weight:600;font-size:.92rem;margin-bottom:.4rem;color:var(--ink)}
+.cbx-sal .cbx-card .cbx-h{font-size:.8rem;color:var(--muted);margin-top:.4rem;line-height:1.35}
+.cbx-sal .cbx-card .form-control,.cbx-sal .cbx-card select{border:1px solid #cbd5e1;border-radius:10px;padding:.6rem .8rem;font-size:1rem;width:100%;background-color:#fff;height:auto}
+.cbx-sal .cbx-card .form-control:focus,.cbx-sal .cbx-card select:focus{border-color:var(--a);box-shadow:0 0 0 .2rem #15803d33;outline:0}
+.cbx-sal .cbx-card .form-check{display:flex;align-items:center;gap:.55rem;margin:.25rem 0;padding-left:0}
+.cbx-sal .cbx-card .form-check-input{float:none;margin:0;width:1.15rem;height:1.15rem;accent-color:var(--a);flex:0 0 auto}
+.cbx-sal .cbx-card textarea.form-control{min-height:90px}
+.cbx-sal .cbx-card .radio,.cbx-sal .cbx-card .checkbox{margin:0}
+.cbx-sal .cbx-card .radgroup{display:flex;flex-wrap:wrap;gap:.35rem 1.6rem}
+.cbx-sal .cbx-card div[style*="float"]{float:none!important}
+.cbx-sal .cbx-card input[data-type=yesno]{width:1.45rem;height:1.45rem;margin:0}
+.cbx-sal .cbx-card label.radio,.cbx-sal .cbx-card label.form-check-label{margin:0;font-weight:500;cursor:pointer}
+.cb_bootstrap .btcalctoolbar{float:none!important;width:100%!important;margin:1.4rem 0 1.6rem!important;text-align:center;padding:0}
+.cb_bootstrap .row-fluid{width:100%}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary{background:linear-gradient(135deg,#15803d,#4ade80);border:0;color:#fff;font-weight:700;font-size:1.05rem;padding:.8rem 2.4rem;border-radius:999px;box-shadow:0 6px 16px #15803d44;transition:transform .15s,box-shadow .15s;cursor:pointer}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px #15803d55}
+.cb_bootstrap .btcalctoolbar input.btn.btn-primary:focus-visible{outline:3px solid #15803d66;outline-offset:2px}
+.cbx-sal-res{--a:#15803d;--a2:#4ade80;--soft:#f0fdf4;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;color:var(--ink)}
+.cbx-sal-res .cbx-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin-bottom:1rem}
+.cbx-sal-res .cbx-hero-card{position:relative;overflow:hidden;color:#fff;border-radius:16px;padding:1.4rem 1.5rem;background:linear-gradient(135deg,var(--a),var(--a2));box-shadow:0 8px 20px #15803d33}
+.cbx-sal-res .cbx-hero-card:nth-child(2){background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 8px 20px rgba(15,23,42,.25)}
+.cbx-sal-res .cbx-hero-card:nth-child(3){background:linear-gradient(135deg,var(--a2),var(--a))}
+.cbx-sal-res .cbx-hero-card .cbx-ic{font-size:1.35rem;opacity:.9;margin-bottom:.6rem}
+.cbx-sal-res .cbx-hero-card .cbx-lab{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;opacity:.92;font-weight:600}
+.cbx-sal-res .cbx-hero-card .cbx-val{font-size:2.35rem;font-weight:800;line-height:1.15;margin:.2rem 0 .3rem;letter-spacing:-.01em}
+.cbx-sal-res .cbx-hero-card .cbx-sub{font-size:.88rem;opacity:.92}
+.cbx-sal-res .cbx-hero-card:after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+.cbx-sal-res .cbx-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.9rem;margin-bottom:1rem}
+.cbx-sal-res .cbx-metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.cbx-sal-res .cbx-metric .cbx-ic{color:var(--a);font-size:1.15rem;margin-bottom:.45rem}
+.cbx-sal-res .cbx-metric .cbx-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cbx-sal-res .cbx-metric .cbx-val{font-size:1.45rem;font-weight:800;margin-top:.15rem;line-height:1.2}
+.cbx-sal-res .cbx-panel{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cbx-sal-res .cbx-panel h4{font-size:.95rem;font-weight:700;margin:0 0 .7rem;color:var(--a)}
+.cbx-sal-res .cbx-bar{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;position:relative}
+.cbx-sal-res .cbx-bar>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--a2),var(--a))}
+.cbx-sal-res .cbx-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px dashed var(--line);font-size:.95rem}
+.cbx-sal-res .cbx-row:last-child{border-bottom:0}
+.cbx-sal-res .cbx-row b{font-weight:700}
+.cbx-sal-res .cbx-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.cbx-sal-res .cbx-table th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.cbx-sal-res .cbx-table td{padding:.5rem .6rem;border-bottom:1px solid var(--line)}
+.cbx-sal-res .cbx-table .r{text-align:right}
+.cbx-sal-res .cbx-gaugewrap{position:relative;padding-top:8px}
+.cbx-sal-res .cbx-gauge{display:flex;height:14px;border-radius:999px;overflow:hidden}
+.cbx-sal-res .cbx-gauge i{display:block;height:100%}
+.cbx-sal-res .cbx-pin{position:absolute;top:0;width:5px;height:30px;background:#0f172a;border-radius:3px;transform:translateX(-50%);box-shadow:0 0 0 2px #fff}
+.cbx-sal-res .cbx-ticks{position:relative;height:1.3rem;margin:.4rem 12px 0;font-size:.78rem;color:var(--muted)}
+.cbx-sal-res .cbx-ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cbx-sal-res .cbx-chart{display:flex;align-items:flex-end;gap:3px;height:190px;padding-top:6px;border-bottom:2px solid var(--line)}
+.cbx-sal-res .cbx-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+.cbx-sal-res .cbx-col .sa{background:var(--a)}
+.cbx-sal-res .cbx-col .sb{background:var(--a2);border-radius:4px 4px 0 0}
+.cbx-sal-res .cbx-xl{display:flex;gap:3px;font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.cbx-sal-res .cbx-xl span{flex:1;text-align:center;min-width:0;overflow:visible;white-space:nowrap}
+.cbx-sal-res .cbx-legend{display:flex;gap:1.2rem;font-size:.82rem;color:var(--muted);margin-top:.7rem;flex-wrap:wrap}
+.cbx-sal-res .cbx-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.4rem;vertical-align:-1px}
+.cbx-sal-res .cbx-note{font-size:.85rem;color:var(--muted);border-top:1px dashed #cbd5e1;padding-top:.8rem;margin:.4rem 0 0}
+.cbx-sal-res .cbx-badge{display:inline-block;border-radius:999px;padding:.2rem .7rem;font-size:.78rem;font-weight:700;background:var(--soft);color:var(--a);border:1px solid var(--a)}
+</style>
+<div class="cbx-sal"><div class="cbx-grid">
+<div class="cbx-sec">Your pay</div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Gross annual salary (&euro;)</label>##salary##<div class="cbx-h">Your yearly salary before tax and any other deduction.</div></div></div>
+<div class="cbx-c6"><div class="cbx-card"><label class="cbx-l">Pay frequency</label>##freq##<div class="cbx-h">How many payments you receive per year (some countries pay 13 or 14).</div></div></div>
+<div class="cbx-sec">Tax situation and deductions</div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Filing status</label>##status##<div class="cbx-h">Married filers get a higher personal allowance in this model.</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Pension contribution (% of gross)</label>##pension##<div class="cbx-h">Comes out of your pay and reduces your taxable income (up to a limit).</div></div></div>
+<div class="cbx-c4"><div class="cbx-card"><label class="cbx-l">Student loan</label>##loan##<div class="cbx-h">Tick if you repay a student loan (9% of salary above &euro;27,000).</div></div></div>
+</div></div>]]></layout>
+                    <exitlayout><![CDATA[<div class="cbx-sal-res">
+<p style="margin:0 0 .8rem"><span class="cbx-badge">Powered by an Excel workbook</span></p>
+<div class="cbx-hero">
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-wallet" aria-hidden="true"></i></div><div class="cbx-lab">Net pay per payment</div><div class="cbx-val">&euro;##netp_f##</div><div class="cbx-sub">##pay_note##</div></div>
+<div class="cbx-hero-card"><div class="cbx-ic"><i class="fa fa-piggy-bank" aria-hidden="true"></i></div><div class="cbx-lab">Net annual take-home</div><div class="cbx-val">&euro;##net_f##</div><div class="cbx-sub">You keep ##takehome_pct##% of your &euro;##salary_f## gross</div></div>
+</div>
+<div class="cbx-metrics">
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-scissors" aria-hidden="true"></i></div><div class="cbx-lab">Total deductions</div><div class="cbx-val">&euro;##ded_f##</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-percent" aria-hidden="true"></i></div><div class="cbx-lab">Effective tax rate</div><div class="cbx-val">##eff_f##%</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-arrow-trend-up" aria-hidden="true"></i></div><div class="cbx-lab">Marginal rate</div><div class="cbx-val">##marg_f##%</div></div>
+<div class="cbx-metric"><div class="cbx-ic"><i class="fa fa-vault" aria-hidden="true"></i></div><div class="cbx-lab">Pension saved</div><div class="cbx-val">&euro;##pen_f##</div></div>
+</div>
+<style>
+.cbx-sal-res .sal-stack{display:flex;height:44px;border-radius:12px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(15,23,42,.08)}
+.cbx-sal-res .sal-stack>div{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.85rem;min-width:0;overflow:hidden;white-space:nowrap;border-right:2px solid #fff}
+.cbx-sal-res .sal-stack>div:last-child{border-right:0}
+.cbx-sal-res .sal-leg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem 2rem;margin-top:.9rem}
+.cbx-sal-res .sal-leg .li{display:grid;grid-template-columns:.8rem 1fr auto 3.2rem;align-items:center;gap:.5rem;font-size:.9rem;padding:.3rem 0;border-bottom:1px dashed var(--line)}
+.cbx-sal-res .sal-leg .li i{width:.8rem;height:.8rem;border-radius:3px;display:block}
+.cbx-sal-res .sal-leg .li b{font-weight:700;text-align:right}
+.cbx-sal-res .sal-leg .li em{font-style:normal;color:var(--muted);text-align:right;font-size:.82rem}
+.cbx-sal-res .sal-tbl td small{display:block;color:var(--muted);font-size:.78rem;margin-top:.1rem}
+.cbx-sal-res .sal-tbl tr.off td{opacity:.4}
+.cbx-sal-res .sal-tbl tr.tot td{font-weight:800;border-top:2px solid var(--line);border-bottom:0;background:#fff}
+.cbx-sal-res .sal-tbl td,.cbx-sal-res .sal-tbl th{padding:.5rem .45rem}
+.cbx-sal-res .sal-cols{display:grid;grid-template-columns:1fr;gap:1rem}
+.cbx-sal-res .sal-taxable{font-size:.9rem;color:var(--muted);margin:0 0 .6rem}
+@media(max-width:640px){.cbx-sal-res .sal-leg{grid-template-columns:1fr}}
+@media(max-width:480px){.cbx-sal-res .sal-tbl{font-size:.82rem}.cbx-sal-res .sal-leg{grid-template-columns:1fr}.cbx-sal-res .cbx-panel{padding:1rem .8rem}}
+</style><div class="cbx-panel"><h4>Where your gross salary goes</h4>##gross_bar##</div><div class="cbx-panel"><h4>Income tax, band by band</h4><p class="sal-taxable">Taxable income <b>&euro;##taxable_f##</b> = gross salary &minus; pension relief &minus; personal allowance (&euro;##allow_f## for ##status_f##). Each band taxes only the slice of income that falls inside it.</p>##band_table##</div>
+<p class="cbx-note">Illustrative model: a generic five-band tax system with made-up allowances and rates, not any country&rsquo;s real rules. Effective rate = (income tax + social contributions) / gross. Marginal rate = income-tax band + social contributions + loan on your next euro. Not tax advice.</p>
+</div>]]></exitlayout>
+                    <js_functions><![CDATA[]]></js_functions>
+                    <js_pre_calc_button><![CDATA[]]></js_pre_calc_button>
+                    <js_reset_button><![CDATA[]]></js_reset_button>
+                    <js_post_calc_button><![CDATA[]]></js_post_calc_button>
+                    <js_event_code><![CDATA[]]></js_event_code>
+                    <import_bootstrap><![CDATA[1]]></import_bootstrap>
+                    <import_jquery><![CDATA[1]]></import_jquery>
+                    <datasave><![CDATA[-1]]></datasave>
+                    <calculate_button_text><![CDATA[Calculate take-home pay]]></calculate_button_text>
+                    <include_input><![CDATA[0]]></include_input>
+                    <include_result><![CDATA[1]]></include_result>
+                    <mail_subject><![CDATA[]]></mail_subject>
+                    <calc_on_init><![CDATA[1]]></calc_on_init>
+                    <layout_position><![CDATA[0]]></layout_position>
+                    <form_layout_width><![CDATA[100%]]></form_layout_width>
+                    <sendemailcc><![CDATA[]]></sendemailcc>
+                    <sendemailbcc><![CDATA[]]></sendemailbcc>
+                    <mc_api><![CDATA[]]></mc_api>
+                    <mc_email><![CDATA[]]></mc_email>
+                    <mc_list><![CDATA[]]></mc_list>
+                    <mc_apply><![CDATA[0]]></mc_apply>
+                    <mc_email_name><![CDATA[]]></mc_email_name>
+                    <mc_email_lastname><![CDATA[]]></mc_email_lastname>
+                    <sectionaddposition><![CDATA[0]]></sectionaddposition>
+                    <precalcprintpdf><![CDATA[]]></precalcprintpdf>
+                    <poscalcprintpdf><![CDATA[]]></poscalcprintpdf>
+                    <include_input_pdf><![CDATA[0]]></include_input_pdf>
+                    <include_result_pdf><![CDATA[0]]></include_result_pdf>
+                    <emailaddpdf><![CDATA[0]]></emailaddpdf>
+                    <sectionposition><![CDATA[0]]></sectionposition>
+                    <emailfile><![CDATA[]]></emailfile>
+                    <save_pdf_folder><![CDATA[/media/com_calcbuilder]]></save_pdf_folder>
+                    <js_pre_calc_inline_button><![CDATA[]]></js_pre_calc_inline_button>
+                    <js_post_calc_inline_button><![CDATA[]]></js_post_calc_inline_button>
+            </utility> <fields>
+                    <field>
+                                <id><![CDATA[101]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[25]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[0]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[salary]]></var>
+                                    <name><![CDATA[Gross annual salary]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[62000]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[102]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[25]]></idobj>
+                                    <type><![CDATA[2]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[1]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[freq]]></var>
+                                    <name><![CDATA[Pay frequency]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[12]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[12 payments a year (monthly)]]></name>
+                            <value><![CDATA[12]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[13 payments a year]]></name>
+                            <value><![CDATA[13]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[14 payments a year]]></name>
+                            <value><![CDATA[14]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[103]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[25]]></idobj>
+                                    <type><![CDATA[12]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[2]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[status]]></var>
+                                    <name><![CDATA[Filing status]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[1]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                        <multivalue> <name><![CDATA[Single]]></name>
+                            <value><![CDATA[1]]></value> </multivalue>
+                                            <multivalue> <name><![CDATA[Married]]></name>
+                            <value><![CDATA[2]]></value> </multivalue>
+                                    </multivalues> </field>
+                            <field>
+                                <id><![CDATA[104]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[25]]></idobj>
+                                    <type><![CDATA[0]]></type>
+                                    <decimal><![CDATA[1]]></decimal>
+                                    <order><![CDATA[3]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[pension]]></var>
+                                    <name><![CDATA[Pension contribution %]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[5]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                            <field>
+                                <id><![CDATA[105]]></id>
+                                    <class><![CDATA[]]></class>
+                                    <mandatory><![CDATA[0]]></mandatory>
+                                    <idobj><![CDATA[25]]></idobj>
+                                    <type><![CDATA[3]]></type>
+                                    <decimal><![CDATA[0]]></decimal>
+                                    <order><![CDATA[4]]></order>
+                                    <css><![CDATA[]]></css>
+                                    <var><![CDATA[loan]]></var>
+                                    <name><![CDATA[Student loan]]></name>
+                                    <limit0><![CDATA[]]></limit0>
+                                    <limit1><![CDATA[]]></limit1>
+                                    <placeholder><![CDATA[]]></placeholder>
+                                    <mask><![CDATA[]]></mask>
+                                    <combodependantfield><![CDATA[]]></combodependantfield>
+                                    <multivalue><![CDATA[]]></multivalue>
+                                    <defaulttext><![CDATA[]]></defaulttext>
+                                    <sqltext><![CDATA[]]></sqltext>
+                                    <combodependantsql><![CDATA[]]></combodependantsql>
+                                    <inlineevent><![CDATA[0]]></inlineevent>
+                                    <sqlhost><![CDATA[]]></sqlhost>
+                                    <sqldb><![CDATA[]]></sqldb>
+                                    <sqluser><![CDATA[]]></sqluser>
+                                    <sqlpass><![CDATA[]]></sqlpass>
+                                    <combodependanthost><![CDATA[]]></combodependanthost>
+                                    <combodependantdb><![CDATA[]]></combodependantdb>
+                                    <combodependantuser><![CDATA[]]></combodependantuser>
+                                    <combodependantpass><![CDATA[]]></combodependantpass>
+                                <multivalues>
+                                </multivalues> </field>
+                    </fields> <matrices>
+            </matrices> <sections>
+            </sections>
+                <excel>
+                        <id><![CDATA[6]]></id>
+                            <idobj><![CDATA[25]]></idobj>
+                            <excelfile><![CDATA[8118_salary_take_home_model.xlsx]]></excelfile>
+                            <excelexec><![CDATA[2]]></excelexec>
+                            <cache><![CDATA[0]]></cache>
+                            <htmloutput><![CDATA[0]]></htmloutput>
+                            <pdfoutput><![CDATA[0]]></pdfoutput>
+                            <htmloutputpage><![CDATA[0]]></htmloutputpage>
+                            <pdfoutputpage><![CDATA[0]]></pdfoutputpage>
+                            <exceloutput><![CDATA[0]]></exceloutput>
+                            <locale><![CDATA[en_uk]]></locale>
+                    </excel>
+        <excelmapping>
+                            <mapping>
+                                        <id><![CDATA[50]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B5]]></cell>
+                                            <phpvar><![CDATA[salary]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[51]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B6]]></cell>
+                                            <phpvar><![CDATA[freq]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[52]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B7]]></cell>
+                                            <phpvar><![CDATA[status]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[53]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B8]]></cell>
+                                            <phpvar><![CDATA[pension]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[54]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[0]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B9]]></cell>
+                                            <phpvar><![CDATA[loan_flag]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[55]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B12]]></cell>
+                                            <phpvar><![CDATA[tax_total]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[56]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B13]]></cell>
+                                            <phpvar><![CDATA[social_amt]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[57]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B14]]></cell>
+                                            <phpvar><![CDATA[pension_amt]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[58]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B15]]></cell>
+                                            <phpvar><![CDATA[loan_amt]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[59]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B16]]></cell>
+                                            <phpvar><![CDATA[total_ded]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[60]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B17]]></cell>
+                                            <phpvar><![CDATA[net_annual]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[61]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B18]]></cell>
+                                            <phpvar><![CDATA[net_period]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[62]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B19]]></cell>
+                                            <phpvar><![CDATA[eff_rate]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[63]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B20]]></cell>
+                                            <phpvar><![CDATA[marg_income]]></phpvar>
+                                    </mapping>
+                                <mapping>
+                                        <id><![CDATA[64]]></id>
+                                            <idexcel><![CDATA[6]]></idexcel>
+                                            <type><![CDATA[1]]></type>
+                                            <sheet><![CDATA[0]]></sheet>
+                                            <cell><![CDATA[B21]]></cell>
+                                            <phpvar><![CDATA[marg_total]]></phpvar>
+                                    </mapping>
+                        </excelmapping>
+        </calculator>
